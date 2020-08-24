@@ -1,0 +1,7 @@
+1             number of dimensions each particle live in  
+121           number of one-dimensional grid points  
+2           number of particles  
+-14.5          min x-value of grid  
+14.5          max x-value of grid  
+0.005          time step  
+0              0=Pseudo Inverse, 1=MINRES-QLP  

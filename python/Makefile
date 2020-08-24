@@ -1,0 +1,139 @@
+#=======================================================================
+#                   define the compiler names
+#=======================================================================
+
+CC       = g++
+F90      = gfortran
+#F90      = ifort
+#F90      =  /opt/intel/composer_xe_2015.3.187/bin/intel64/ifort
+PYTHON   = python3
+
+#=======================================================================
+#                     additional flags
+#=======================================================================
+
+ifeq ($(F90),gfortran)
+	FPP      = gfortran -E
+	FPP_F90FLAGS = -x f95-cpp-input -fPIC
+	F90FLAGS = -fPIC -fopenmp
+    FCOMP    = gfortran
+    LIBS= -L/usr/lib64 -larpack -lopenblas_openmp -llapack -fopenmp  -lm 
+endif
+
+ifeq ($(F90),ifort)
+
+	FPP      = gfortran -E # gfortran f90wrap temp files only. not compilation
+	FPP_F90FLAGS = -x f95-cpp-input -fPIC
+	F90FLAGS = -fpscomp logicals -fPIC # use 1 and 0 for True and False
+    FCOMP    = intelem # for f2py
+    LIBS =
+endif
+
+CFLAGS = -fPIC #     ==> universal for ifort, gfortran, pgi
+
+#=======================================================================
+#=======================================================================
+
+UNAME = $(shell uname)
+
+ifeq (${UNAME}, Darwin)
+  LIBTOOL = libtool -static -o
+else
+  LIBTOOL = ar src
+endif
+
+# ======================================================================
+# PROJECT CONFIG, do not put spaced behind the variables
+# ======================================================================
+# Python module name
+PYTHON_MODN = TDDFTinversion
+# mapping between Fortran and C types
+KIND_MAP = kind_map
+
+#=======================================================================
+#
+#=======================================================================
+
+#VPATH	=
+
+#=======================================================================
+#       List all source files required for the project
+#=======================================================================
+
+# names (without suffix), f90 sources
+LIBSRC_SOURCES= nchoosekmod mapmod matmul_mod minresqlpDataModule lsqrDataModule lsqrblasInterface lsqrModule minresqlpBlasModule minresqlpModule derivedtypes secondquant_mod secondquant_wrap keomod potmod sortmod pot_invert_mod density_mod density_wrap assign_phases_mod hamiltonian_mod hamiltonian_wrap initial_states_mod outputdata_mod KSadvance_mod 
+
+# file names
+LIBSRC_FILES = $(addsuffix .f90,${LIBSRC_SOURCES})
+
+# object files
+LIBSRC_OBJECTS = $(addsuffix .o,${LIBSRC_SOURCES})
+
+# only used when cleaning up
+LIBSRC_FPP_FILES = $(addsuffix .fpp,${LIBSRC_SOURCES})
+
+#=======================================================================
+#       List all source files that require a Python interface
+#=======================================================================
+
+# names (without suffix), f90 sources
+LIBSRC_WRAP_SOURCES = derivedtypes secondquant_wrap keomod density_wrap hamiltonian_wrap potmod initial_states_mod KSadvance_mod 
+
+# file names
+LIBSRC_WRAP_FILES = $(addsuffix .f90,${LIBSRC_WRAP_SOURCES})
+
+# object files
+LIBSRC_WRAP_OBJECTS = $(addsuffix .o,${LIBSRC_WRAP_SOURCES})
+
+# fpp files
+LIBSRC_WRAP_FPP_FILES = $(addsuffix .fpp,${LIBSRC_WRAP_SOURCES})
+
+#=======================================================================
+#                 Relevant suffixes
+#=======================================================================
+
+.SUFFIXES: .f90 .fpp
+
+#=======================================================================
+#
+#=======================================================================
+
+.PHONY: all clean
+
+
+all: _${PYTHON_MODN}.so _${PYTHON_MODN}_pkg.so
+
+
+clean:
+	-rm -f ${LIBSRC_OBJECTS} ${LIBSRC_FPP_FILES} libsrc.a _${PYTHON_MODN}*.so \
+	_${PYTHON_MODN}_pkg.so *.mod *.fpp f90wrap*.f90 f90wrap*.o *.o ${PYTHON_MODN}.py
+	-rm -rf ${PYTHON_MODN}_pkg
+	-rm -rf src.*/ .f2py_f2cmap .libs/ __pycache__/
+
+
+.f90.o:
+	${F90} ${F90FLAGS} -c $< -o $@
+
+
+.c.o:
+	${CC} ${CFLAGS} -c $< -o $@
+
+
+.f90.fpp:
+	${FPP} ${FPP_F90FLAGS} $<  -o $@
+
+
+libsrc.a: ${LIBSRC_OBJECTS}
+	${LIBTOOL} $@ $?
+
+
+_${PYTHON_MODN}.so: libsrc.a ${LIBSRC_FPP_FILES}
+	f90wrap -m ${PYTHON_MODN} ${LIBSRC_WRAP_FPP_FILES} -k ${KIND_MAP} -v
+	f2py-f90wrap --fcompiler=$(FCOMP) --build-dir . -L/usr/lib64 -larpack -lopenblas_openmp -llapack -lgomp -c -m _${PYTHON_MODN} -L. -lsrc f90wrap*.f90
+
+
+_${PYTHON_MODN}_pkg.so: libsrc.a ${LIBSRC_FPP_FILES}
+	f90wrap -m ${PYTHON_MODN}_pkg ${LIBSRC_WRAP_FPP_FILES} -k ${KIND_MAP} -v -P
+	f2py-f90wrap --fcompiler=$(FCOMP) --build-dir . -L/usr/lib64 -larpack -lopenblas_openmp -llapack -lgomp -c -m _${PYTHON_MODN}_pkg -L. -lsrc f90wrap*.f90
+
+
