@@ -8,46 +8,46 @@ module derivedtypes
      integer :: ntot2 !number of grid points for two particles
      integer :: ntot  !number of grid points for full system
      real(8) :: dx !grid spacing
-     real(8) :: ct
-     real(8) :: dt
-     real(8) :: dth
-     real(8) :: xmax,xmin
-     real(8) :: energy
-     real(8) :: energynew
-     integer :: dvks_sw
-     integer :: dvksh_sw
-     real(8) :: dvksmax
-     integer :: pinv0minresqlp1
-     integer :: quantization
-     integer :: newfile
-     integer :: outputdata
-     integer :: loop
-     integer :: occupy_case 
-     integer :: singlet,triplet
+     real(8) :: ct !current time
+     real(8) :: dt !current time step
+     real(8) :: dth !goal time step	
+     real(8) :: xmax,xmin !max grid value, min grid value
+     real(8) :: energy !energy of KS system at ct
+     real(8) :: energynew !energy of KSsystem at time ct+dt
+     integer :: dvks_sw !switch for propagator, don't change
+     integer :: dvksh_sw !switch for propagator, don't change
+     real(8) :: dvksmax !max time-derivative of potential
+     integer :: pinv0minresqlp1 !which inversion algorithm
+     integer :: quantization !first =1 or second =2 quantization
+     integer :: newfile !generate new output file
+     integer :: outputdata !output data after successful time step
+     integer :: loop !don't change, internal counter
+     integer :: occupy_case  !used for the initialization of the KS orbitals 
+     integer :: singlet,triplet !singlet,triplet=1 turns on singlet symmetry
      real(8), allocatable :: xlattice(:) !1D grid points
      real(8), allocatable :: T(:,:) !1D kinetic energy operator
   end type systemparameters
 
   type ksvalues
-     complex(8), allocatable :: phi(:,:)
-     real(8), allocatable :: vks(:)
-     real(8), allocatable :: vksh(:)
-     real(8), allocatable :: vkshh(:)
-     real(8), allocatable :: vhar(:)
-     real(8), allocatable :: dvks(:)
-     real(8), allocatable :: dvksh(:)
-     real(8), allocatable :: dp(:)
+     complex(8), allocatable :: phi(:,:) !KS orbtial
+     real(8), allocatable :: vks(:) !current Vks potential
+     real(8), allocatable :: vksh(:) !previous Vks potential - external 1-body potential
+     real(8), allocatable :: vkshh(:) !second previous Vks potential - 1-body potential
+     real(8), allocatable :: vhar(:) !hartree potential
+     real(8), allocatable :: dvks(:) !time-derivative of potential
+     real(8), allocatable :: dvksh(:) !previous time-derivative of potential
+     real(8), allocatable :: dp(:) !current KS density
   end type ksvalues
 
   type fullvalues
-     complex(8), allocatable :: psi(:)
-     real(8), allocatable :: v(:)
+     complex(8), allocatable :: psi(:) !full n-body wavefunction size sysparams%ntot
+     real(8), allocatable :: v(:) !2-body or full n-body potential depending on quantization
   end type fullvalues
   
   type sharedvalues
-     real(8), allocatable :: v1(:)
-     real(8), allocatable :: vin(:)
-     real(8), allocatable :: vinteract(:)
+     real(8), allocatable :: v1(:) !1-body external potential
+     real(8), allocatable :: vin(:) !time-independant 1-body external potential
+     real(8), allocatable :: vinteract(:) !interaction potential
   end type sharedvalues
 
 contains

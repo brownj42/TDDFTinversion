@@ -2,6 +2,14 @@
 
 This is a basic introduction to using the program.
 
+More information about the various modules can be found at
+
+* [potential](potential.md) Various subroutines that generate the potentials for the various examples
+* [density](density.md) Subroutines that calculate the density and its first and second time-derivative for a wavefunction
+* [keomod](keomod.md) Calculates the sinc DVR kinetic energy operator
+* [propagate](propagate.md) Propagates either a wavefunction or attempts to advance the Kohn-Sham orbitals
+* [initials_states](initial_states.md) Subroutines that initialize either the Kohn-Sham system or the corresponding full system for the examples in the paper.
+
 ## Initialization
 
 The initialization mainly uses derived types and subroutines located in the [derivedtypes module](derivedtypes.md).  
@@ -81,10 +89,13 @@ out a few values with.
   sysparams.quantization = #First Quantization, set to 1; Second quantization,
                            #set to 2 (*np.int32*)
   sysparams.energy = #KS system energy, can be anthing (*np.float64*)
-  sysparams.T = #1D Laplacian d^2/dx^2 (can use ``call buildkeo(sysparams)"
+  sysparams.T = #1D Laplacian d^2/dx^2 (can use ``td.keomod.buildkeo(sysparams)"
                 #for using sinc basis) (*np.float64, shape((L,L))*)
   sysparams.xlattice = #position of lattice points [*np.float64,shape(L)*]
 ```
+
+A subroutine that builds the sinc DVR KEO is found at [keomod](keomod.md)
+
 
 ## Fill out system parameters
 
@@ -161,7 +172,7 @@ For certain parameters, can obtain the examples in the paper using
 
 ## Generate the full n-body potential
 
-More information about the potential functions can be found in [potentials.md](potentials.md) 
+More information about the potential functions can be found in [potential.md](potential.md) 
 
 * Fortran
 
@@ -218,9 +229,9 @@ examining one of the examples from the paper
   td.density.fullwf_density(sysparams,fullvals%psi,dpe)
 ```
 
-## Initialize the KS system.
+## Initialize the KS system
 
-The program attemps to initialize the Kohn-Sham system using
+The program attemps to initialize the Kohn-Sham system using the full wavefunction density. The fullvals argument is optional and only used if one particle in KS system. If fullvals is present than KSvals%phi=fullvals%psi, otherwise KSvals%phi=dpe.
 
 * Fortran:
 
@@ -304,15 +315,21 @@ are the values at time sysparams%ct+sysparams%dt.
 ## Attempt to propagate system
 
 * Fortran:
+
 ```f90
   call advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals,info)
 ```
+
 * Python
+
 ```python
-  info = td.ksadvance_mod.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
+  info = td.propagate.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
 ```
 
+More information about the generic time-propagation methods can be found in  [propagate](propagate.md).
+
 ### If info=1
+
 * The orbitals advanced successfully.
 * Data has been output to
   * times.dat has the current time sysparams%dt
@@ -323,20 +340,19 @@ are the values at time sysparams%ct+sysparams%dt.
 wave.dat, pots.dat and dense.dat all separate different times by a double
 space in accordance with the gnuplot format index style. A sample output for
 each with titles for each column is given in
+
 * [times_sample.dat](./times_sample.dat)
 * [wave_sample.dat](./wave_sample.dat)
 * [pots_sample.dat](./pots_sample.dat)
 * [dense_sample.dat](dense_sample.dat)
 
-
 ### If info=0
-
 
 * The time step attempt has failed and (sysparams%dt) has been halved. A new ddnxnew and dpenew will need to
 be calculated at time sysparams%ct+sysparams%dt.
 
-
 ## Obtaining information about KS system
+
 Apart from the information being outputed to a data file. All the information
 about the KS system is included in the ksvals derived type. More information
-about that derived type can be found at [ksvalues](ksvalues.md).
+about that derived type can be found at.

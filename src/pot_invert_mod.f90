@@ -220,10 +220,10 @@ contains
     if (pinv0minresqlp1==1) then
        !use MINRES-QLP for inversion
        if (nd==1) then
-          call minresqlp(n=n,aprod=aprodw,b=s,msolve=msolvew,itnlim=2*n,rtol=1.d-13,x=vks,trancond=5.d5)
+          call minresqlp(n=n,aprod=aprodw,b=s,msolve=msolvew,itnlim=2*n,rtol=1.d-14,x=vks,trancond=5.d5)
        else
           
-           call minresqlp(n=n3,aprod=aprodw3,b=s,shift=0.d0,msolve=msolvew,itnlim=1000,rtol=1.d-13,x=vks,trancond=5.d5)
+           call minresqlp(n=n3,aprod=aprodw3,b=s,shift=0.d0,msolve=msolvew,itnlim=1000,rtol=1.d-14,x=vks,trancond=5.d5)
        end if
        deallocate(TW,ryw,iyw,dyw,mW)
     end if

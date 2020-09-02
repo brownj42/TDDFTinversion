@@ -66,7 +66,7 @@ The density of the KS system at time systemparameters%ct
 #### Data type
 Fortran
 ```f90
-real(8), dimension(ntot1,npart)
+real(8), dimension(ntot1)
 ```
 Python
 ```python
@@ -81,9 +81,95 @@ The full 1-body KS potential at time systemparameters%ct
 #### Data type
 Fortran
 ```f90
-real(8), dimension(ntot1,npart)
+real(8), dimension(ntot1)
 ```
 Python
 ```python
 numpy.empty([ntot1,npart],dtype=numpy.float64)
 ```
+
+### vksh
+
+#### Description
+The full 1-body KS potential with sharedvalues%v1 subtracted off for time from
+the previous successful timestep
+
+#### Data type
+Fortran
+```f90
+real(8), dimension(ntot1)
+```
+Python
+```python
+numpy.empty([ntot1],dtype=numpy.float64)
+```
+
+### vkshh
+
+#### Description
+The full 1-body KS potential with sharedvalues%v1 subtracted off for time from
+the previous to previous successful timestep
+
+#### Data type
+Fortran
+```f90
+real(8), dimension(ntot1)
+```
+Python
+```python
+numpy.empty([ntot1],dtype=numpy.float64)
+```
+
+### vhar
+
+#### Description
+The hartree potential calculated using dp and sharedvalues%vinteract at the
+current time
+
+### vksh
+
+#### Description
+The full 1-body KS potential with sharedvalues%v1 subtracted off for time from
+the previous successful timestep
+
+#### Data type
+Fortran
+```f90
+real(8), dimension(ntot1)
+```
+Python
+```python
+numpy.empty([ntot1],dtype=numpy.float64)
+```
+
+### dvks
+
+#### Description
+The current estimate of the derivative of the vks potential with respect to
+time
+
+#### Data type
+Fortran
+```f90
+real(8), dimension(ntot1)
+```
+Python
+```python
+numpy.empty([ntot1],dtype=numpy.float64)
+```
+
+### dvksh
+
+#### Description
+The previous to current time derivative of the vks potential.
+
+#### Data type
+Fortran
+```f90
+real(8), dimension(ntot1)
+```
+Python
+```python
+numpy.empty([ntot1],dtype=numpy.float64)
+```
+

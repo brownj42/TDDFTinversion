@@ -1,6 +1,7 @@
 module keomod
   implicit none
 contains
+  !returns sysparams%T with sinc DVR KEO
   subroutine buildkeo(sysparams)
     use derivedtypes 
     real(8) :: pi,bandlimit

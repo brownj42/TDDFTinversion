@@ -2,8 +2,9 @@ Module initial_states
   implicit none
 contains
 
+  !Generates the full system wavefunction for the examples in the !paper.
   subroutine initializefullsystem(sysparams,fullvals)
-    use derivedtypes 
+    use derivedtypes
     use hamiltonian_mod
     type(systemparameters), intent(in) :: sysparams
     type(fullvalues), intent(inout) :: fullvals
@@ -36,7 +37,7 @@ contains
        end if
     else
        fullvals%psi=dcmplx(0.d0,0.d0)
-       fullvals%psi(1)=dcmplx(1.d0,1.d0)/sqrt(2.d0)
+       fullvals%psi(1)=dcmplx(1.d0,0.d0)!/sqrt(2.d0)
     end if
   end subroutine initializefullsystem
   
@@ -61,14 +62,18 @@ contains
     call calceigenstates(sysparams1,sharedvals%v1,25,1,KSvals%phi(:,1))
     KSvals%phi(:,2)=0.d0
   end subroutine oneelectrongroundstate 
-
+ 
+  !Initializes the KSvals%phi orbitals given the parameters in
+  !sysparams and sharedvals to match the full electron density dpe
+  !fullvals, optional used for case when only one electron by
+  !setting KSvals%phi(:,1)=fullvals%psi(:)
   subroutine initializeKSsystem(sysparams,sharedvals,dpe,fullvals,KSvals)
     use derivedtypes 
     use density_mod
     type(systemparameters), intent(in) :: sysparams
     real(8), intent(in) :: dpe(:)
     type(sharedvalues), intent(in) :: sharedvals
-    type(fullvalues), intent(in) :: fullvals
+    type(fullvalues), optional, intent(in) :: fullvals
     type(KSvalues), intent(out) :: KSvals
     type(systemparameters) :: sysparams1part
     real(8), allocatable :: fulldens(:,:)
@@ -90,36 +95,40 @@ contains
     allocate(phi(ntot1,npart),dp(ntot1))
     print*,'Calculating initial corresponding KS state'
     if (sysparams%quantization==1) then
-    if (npart==2) then
-       !Generate full one body reduced density matrix
-       !allocate(fulldens(ntot1,ntot1))
-       !fulldens=fullwf_densitymatrix(ntot1,npart,fullvals%psi)
-       !call svd_initial(ntot1,npart,fulldens,phi)
-       !deallocate(fulldens)
+       if (npart==2) then
+          !Generate full one body reduced density matrix
+          !allocate(fulldens(ntot1,ntot1))
+          !fulldens=fullwf_densitymatrix(ntot1,npart,fullvals%psi)
+          !call svd_initial(ntot1,npart,fulldens,phi)
+          !deallocate(fulldens)
        
-       call groundstate_initial(sysparams1part,dpe,sharedvals%v1,phi)
+          call groundstate_initial(sysparams1part,dpe,sharedvals%v1,phi)
        
        
-       !output for debugging purposes 
-       open(unit=232,file='wavebegin.dat')
-       do i=1,ntot1
-          write(232,'(3f20.10)')sysparams%xlattice(i),real(phi(i,1)),real(phi(i,2))
-       end do
-       close(232)
+          !output for debugging purposes 
+          open(unit=232,file='wavebegin.dat')
+          do i=1,ntot1
+             write(232,'(3f20.10)')sysparams%xlattice(i),real(phi(i,1)),real(phi(i,2))
+          end do
+          close(232)
        
-       !generate initial KS density
-       dp=ks_density(ntot1,npart,phi)
+          !generate initial KS density
+          dp=ks_density(ntot1,npart,phi)
        
-       print*,'Properties of initial KS state'
-       print*,'density error',sqrt(dot_product(dp-dpe,dp-dpe))
-       print*,'particle one norm',dot_product(phi(:,1),phi(:,1))
-       print*,'particle two norm',dot_product(phi(:,2),phi(:,2))
-       print*,'overlap of one/two',dot_product(phi(:,1),phi(:,2))
-       KSvals%phi=phi
-    else
-       print*,size(fullvals%psi)
-       KSvals%phi(:,1)=fullvals%psi(:)
-    end if
+          print*,'Properties of initial KS state'
+          print*,'density error',sqrt(dot_product(dp-dpe,dp-dpe))
+          print*,'particle one norm',dot_product(phi(:,1),phi(:,1))
+          print*,'particle two norm',dot_product(phi(:,2),phi(:,2))
+          print*,'overlap of one/two',dot_product(phi(:,1),phi(:,2))
+          KSvals%phi=phi
+       else
+          if (present(fullvals)) then
+             KSvals%phi(:,1)=fullvals%psi(:)
+          else
+             print*,'Warning, should use the same psi as the full system for one particle'
+             KSvals%phi(:,1)=dpe
+          end if
+       end if
     else
       do i=1,sysparams%npart
          KSvals%phi(:,i)=dcmplx(0.d0,0.d0)
@@ -134,7 +143,7 @@ contains
     KSvals%dp=dp
 
   end subroutine initializeKSsystem
-   
+
   subroutine generateunitary(npart,U)
      integer, intent(in) :: npart
      real(8), intent(out) :: U(npart,npart)
@@ -148,8 +157,10 @@ contains
      integer, allocatable :: iwork(:)
      complex(8), allocatable  :: work(:)
      real(8), allocatable :: rwork(:)
+     Uc=0.d0
+     call random_number(w)
      do i =2,npart
-        Uc(2:npart,1)=dcmplx(0.d0,-1.d0*dble(i))
+        Uc(2:npart,1)=dcmplx(0.d0,-w(i))
         Uc(1,2:npart)=-Uc(2:npart,1)
      end do
      
@@ -330,13 +341,36 @@ contains
        occ(1,2)=1.d0
     elseif (sysparams%occupy_case==2) then
        occ(1,1)=1.d0
-       occ(2,1)=-1.d0
+       occ(2,1)=0.2d0
        occ(1,2)=1.0d0
-    else
-       occ(1,1)=3.d0
-       occ(2,1)=0.5d0
-       occ(1,2)=3.d0
+    elseif (sysparams%occupy_case==3) then
+       occ(1,1)=3.5d0
+       occ(2,1)=0.3d0
+       occ(2,1)=0.1d0
+       occ(1,2)=5.5d0
        occ(2,2)=0.5d0
+       occ(3,2)=0.1d0
+    elseif (sysparams%occupy_case==4) then
+       occ(1,1)=3.0d0
+       occ(2,1)=0.7d0
+       occ(3,1)=0.2d0
+       occ(1,2)=7.0d0
+       occ(2,2)=1.7d0
+       occ(3,2)=0.2d0
+    elseif (sysparams%occupy_case==5) then
+       occ(1,1)=5.d0
+       occ(2,1)=0.5d0
+       occ(3,1)=0.5d0
+       occ(1,2)=5.d0
+       occ(2,2)=0.5d0
+       occ(3,2)=0.5d0
+    else
+       occ(1,1)=4.d0
+       occ(2,1)=4.0d0
+       occ(3,1)=4.0d0
+       occ(1,2)=9.d0
+       occ(2,2)=1.0d0
+       occ(3,2)=1.0d0
     end if
     
     errorold=2.d0
@@ -355,8 +389,8 @@ contains
     call random_number(vks)
     vks=vks*0.000d0+v1+10.d0
     prefac=0.05
-    do i=1,10000
-       evens=.false.
+    do i=1,20000
+       evens=.true.
        odds=.false.
        call forcesym1(vks,ntot1)
        fas=1
@@ -380,14 +414,18 @@ contains
           !pause 
           ys=0.d0
           do j=1,3
-             eighold(:,j,1)=sign(1.d0,dot_product(eighold(:,j,1),eigenstates(:,postrac(j,1))))*eigenstates(:,postrac(j,1))
-             eighold(:,j,2)=sign(1.d0,dot_product(eighold(:,j,2),eigenstates(:,postrac(j,2))))*eigenstates(:,postrac(j,2))
              evens=.true.
              odds=.false. 
-             call forcesym1(eighold(:,j,1),ntot1)
+             call forcesym1(eigenstates(:,postrac(j,1)),ntot1)
              evens=.false.
              odds=.true. 
-             call forcesym1(eighold(:,j,2),ntot1)
+             call forcesym1(eigenstates(:,postrac(j,2)),ntot1)
+             eigenstates(:,postrac(j,2))=eigenstates(:,postrac(j,2))/&
+                       sqrt(dot_product(eigenstates(:,postrac(j,2)),eigenstates(:,postrac(j,2))))
+             eigenstates(:,postrac(j,1))=eigenstates(:,postrac(j,1))/&
+                       sqrt(dot_product(eigenstates(:,postrac(j,1)),eigenstates(:,postrac(j,1))))
+             eighold(:,j,1)=sign(1.d0,dot_product(eighold(:,j,1),eigenstates(:,postrac(j,1))))*eigenstates(:,postrac(j,1))
+             eighold(:,j,2)=sign(1.d0,dot_product(eighold(:,j,2),eigenstates(:,postrac(j,2))))*eigenstates(:,postrac(j,2))
              ys(:,1)=ys(:,1)+occ(j,1)*eighold(:,j,1)
              ys(:,2)=ys(:,2)+occ(j,2)*eighold(:,j,2)
           end do
@@ -415,7 +453,7 @@ contains
           dp=dp+abs(dconjg(ys(:,j))*ys(:,j))
        end do
        change=-prefac*dlog(dp/dpe)
-       change=-prefac*dlog(1.d0+(dp-dpe)/(dp+dpe))
+       change=-prefac*dlog(1.d0+(dp-dpe)/(dp+1.1d0*dpe))
        !print*,sign(min(abs(change),0.01d0),change)
        vks=vks-change!sign(min(abs(change),40.1d0),change)
        errornew=sqrt(dot_product(dpe-dp,dpe-dp))
@@ -425,7 +463,7 @@ contains
           if (errornew.lt.errorold.and.(i/1000)*1000==i) then
           prefac=prefac*1.1d0
           end if
-       if (errornew.lt.1.d-14) then
+       if (errornew.lt.1.d-11) then
           exit
        end if
        if (abs(errornew-errorold)/errornew.lt.1.d-12.and.errornew.gt.1.d-6) then
@@ -449,6 +487,8 @@ contains
     end if
   end subroutine groundstate_initial
 
+  !calculates all eigenstates of a 1D Hamiltonian with KEO matrix T and
+  !diagonal potential v of length np1
   subroutine calcalleigenstates(np1,T,v,eigenstates)
      integer, intent(in) :: np1
      real(8), intent(in) :: T(:,:)

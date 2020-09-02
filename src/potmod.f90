@@ -1,6 +1,7 @@
 Module potential
   implicit none
 contains
+  !Generates the 1body potential given different input parameters.
   subroutine generate_1bodypot(sysparams,sharedvals)
     use derivedtypes 
     type(systemparameters), intent(in) :: sysparams
@@ -37,6 +38,7 @@ contains
 
   end subroutine generate_1bodypot
 
+  !Generates the 2body potential for different input parameters
   subroutine generate_2bodypot(sysparams,sharedvals)
     use derivedtypes
     type(systemparameters), intent(in) :: sysparams
@@ -75,6 +77,7 @@ contains
     end if
   end subroutine generate_2bodypot
 
+  !Generates the full n_body wavefunction, really only used for the 1D 2-electron example
   subroutine generate_nbodypot(sysparams,sharedvals,fullvals)
     use derivedtypes
     type(systemparameters), intent(in) :: sysparams
@@ -173,6 +176,7 @@ contains
     end do
   end function pot2particle
   
+  !adds the driving potential for the 1D 2-electron example
   subroutine add_driving_potential(sysparams,sharedvals,fullvals)
     use derivedtypes 
     type(systemparameters), intent(in) :: sysparams
@@ -191,6 +195,7 @@ contains
           fullvals%v(l)=fullvals%v(l)-0.1d0*(xlattice(i)+xlattice(j))
        end do
        sharedvals%v1(i)=sharedvals%v1(i)-0.1d0*xlattice(i)
+       sharedvals%vin(i)=sharedvals%vin(i)-0.1d0*xlattice(i)
     end do
   end subroutine add_driving_potential
 end Module potential
