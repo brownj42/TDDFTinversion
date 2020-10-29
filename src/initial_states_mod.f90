@@ -8,6 +8,8 @@ contains
     use hamiltonian_mod
     type(systemparameters), intent(in) :: sysparams
     type(fullvalues), intent(inout) :: fullvals
+    complex(8), allocatable :: eigf(:,:)
+    real(8), allocatable :: eigval(:)
     integer :: np1,ntot,nd,npart
     real(8) :: dx
     npart=sysparams%npart
@@ -20,7 +22,12 @@ contains
        print*,'Calculating full Wavefunction starting state'
        if (npart==2.and.nd==1) then
           !calculate eigenvector for full 2 particle system
-          call calceigenstates(sysparams,fullvals%v,30,1,fullvals%psi)
+          allocate(eigf(sysparams%ntot,1))
+          allocate(eigval(1))
+          call calceigenstates(sysparams,fullvals%v,30,1,eigf,eigval)
+          print*,eigval
+          fullvals%psi=eigf(:,1)
+          deallocate(eigval,eigf)
           fullvals%psi=fullvals%psi/&
                dsqrt(dble(dot_product(fullvals%psi,fullvals%psi)))
        elseif (nd==1.and.npart==1) then
@@ -59,7 +66,7 @@ contains
     odds=.false.
     use2=.false.
     call init_ksvalues(sysparams,ksvals) 
-    call calceigenstates(sysparams1,sharedvals%v1,25,1,KSvals%phi(:,1))
+    call calceigenstates(sysparams1,sharedvals%v1,25,1,KSvals%phi(:,1:1))
     KSvals%phi(:,2)=0.d0
   end subroutine oneelectrongroundstate 
  
@@ -67,13 +74,15 @@ contains
   !sysparams and sharedvals to match the full electron density dpe
   !fullvals, optional used for case when only one electron by
   !setting KSvals%phi(:,1)=fullvals%psi(:)
-  subroutine initializeKSsystem(sysparams,sharedvals,dpe,fullvals,KSvals)
+  subroutine initializeKSsystem(sysparams,sharedvals,dpe,fullvals,KSvals,occupy,cutoff)
     use derivedtypes 
     use density_mod
     type(systemparameters), intent(in) :: sysparams
     real(8), intent(in) :: dpe(:)
     type(sharedvalues), intent(in) :: sharedvals
     type(fullvalues), optional, intent(in) :: fullvals
+    real(8), optional, intent(in) :: occupy(:,:)
+    real(8), optional, intent(in) :: cutoff
     type(KSvalues), intent(out) :: KSvals
     type(systemparameters) :: sysparams1part
     real(8), allocatable :: fulldens(:,:)
@@ -101,8 +110,15 @@ contains
           !fulldens=fullwf_densitymatrix(ntot1,npart,fullvals%psi)
           !call svd_initial(ntot1,npart,fulldens,phi)
           !deallocate(fulldens)
-       
-          call groundstate_initial(sysparams1part,dpe,sharedvals%v1,phi)
+          if (present(occupy)) then
+             call groundstate_initial(sysparams1part,dpe,sharedvals%v1,phi,KSvals%vks,KSvals%init,occupy=occupy)
+          else
+             if (present(cutoff)) then
+                call groundstate_initial(sysparams1part,dpe,sharedvals%v1,phi,KSVals%vks,KSvals%init,cutoff=cutoff)
+             else 
+                call groundstate_initial(sysparams1part,dpe,sharedvals%v1,phi,KSVals%vks,KSvals%init)
+             end if
+          end if
        
        
           !output for debugging purposes 
@@ -310,14 +326,19 @@ contains
 
   end subroutine svd
 
-  subroutine groundstate_initial(sysparams,dpe,v1,ys)
+  subroutine groundstate_initial(sysparams,dpe,v1,ys,vksout,success,occupy,cutoff)
     use derivedtypes 
     use hamiltonian_mod
     type(systemparameters), intent(in) :: sysparams
     real(8), intent(in) :: dpe(:),v1(:)
     complex(8), intent(out) :: ys(:,:)
+    real(8), intent(out) :: vksout(:)
+    complex(8), allocatable :: wave(:,:)
+    integer, intent(out) :: success
+    real(8), optional, intent(in) :: occupy(:,:)
+    real(8), optional, intent(in) :: cutoff
     integer :: ntot1
-    real(8) :: ener,errorold,errornew,prefac
+    real(8) :: ener,errorold,errornew,prefac,ecut
     real(8), allocatable :: T(:,:)
     integer :: i,j
     integer :: postrac(3,2),loc(1)
@@ -325,7 +346,13 @@ contains
     real(8), allocatable :: eighold(:,:,:)
     real(8), allocatable :: vks(:),dp(:),change(:)
     real(8), allocatable :: eigenstates(:,:)
-    
+
+    if (present(cutoff)) then
+       ecut=cutoff
+    else 
+       ecut=5.d-13
+    end if    
+
     !postrac(2,2) !number of states for each, number of particles
     postrac(1,1)=1
     postrac(2,1)=3
@@ -333,6 +360,7 @@ contains
     postrac(1,2)=2
     postrac(2,2)=4
     postrac(3,2)=6
+    success=0
     occ=0.d0
     if (sysparams%occupy_case==0) then
        occ(1,:)=1.d0
@@ -341,45 +369,64 @@ contains
        occ(1,2)=1.d0
     elseif (sysparams%occupy_case==2) then
        occ(1,1)=1.d0
-       occ(2,1)=0.2d0
        occ(1,2)=1.0d0
+       occ(2,2)=0.5d0
     elseif (sysparams%occupy_case==3) then
        occ(1,1)=3.5d0
-       occ(2,1)=0.3d0
+       occ(2,1)=0.4d0
        occ(2,1)=0.1d0
        occ(1,2)=5.5d0
-       occ(2,2)=0.5d0
-       occ(3,2)=0.1d0
+       occ(2,2)=0.0d0
+       occ(3,2)=0.0d0
     elseif (sysparams%occupy_case==4) then
-       occ(1,1)=3.0d0
-       occ(2,1)=0.7d0
-       occ(3,1)=0.2d0
-       occ(1,2)=7.0d0
-       occ(2,2)=1.7d0
-       occ(3,2)=0.2d0
+       occ(1,1)=1.0d0
+       occ(2,1)=0.3d0
+       occ(3,1)=0.0d0
+       occ(1,2)=5.5d0
+       occ(2,2)=1.0d0
+       occ(3,2)=0.0d0
     elseif (sysparams%occupy_case==5) then
        occ(1,1)=5.d0
-       occ(2,1)=0.5d0
-       occ(3,1)=0.5d0
+       occ(2,1)=2.0d0
+       occ(3,1)=0.1d0
        occ(1,2)=5.d0
-       occ(2,2)=0.5d0
-       occ(3,2)=0.5d0
+       occ(2,2)=2.0d0
+       occ(3,2)=0.1d0
+    elseif (sysparams%occupy_case==6) then
+       occ(1,1)=4.0d0
+       occ(2,1)=1.0d0
+       occ(3,1)=0.1d0
+       occ(1,2)=5.d0
+       occ(2,2)=1.1d0
+       occ(3,2)=1.1d0
     else
-       occ(1,1)=4.d0
-       occ(2,1)=4.0d0
-       occ(3,1)=4.0d0
-       occ(1,2)=9.d0
+       occ(1,1)=1.5d0
+       occ(2,1)=1.0d0
+       occ(3,1)=0.5d0
+       occ(1,2)=1.5d0
        occ(2,2)=1.0d0
-       occ(3,2)=1.0d0
+       occ(3,2)=0.5d0
+    end if
+    if (present(occupy)) then
+       occ(1:3,1:2)=occupy(1:3,1:2)
+       print*,occ(1,:)
+       print*,occ(2,:)
+       print*,occ(3,:)
+
     end if
     
     errorold=2.d0
-   
+
+    
     ntot1=sysparams%ntot1
+    
     allocate(eighold(ntot1,3,2))
     if (sysparams%nd==1) then
        allocate(eigenstates(ntot1,ntot1))
+    else
+       allocate(wave(ntot1,3))
     end if
+    
     allocate(vks(ntot1),dp(ntot1))
     allocate(T(ntot1,ntot1))
     allocate(change(ntot1))
@@ -398,7 +445,8 @@ contains
        odds=.false.
        use2=.false.
        if (sysparams%nd>1) then
-          call calceigenstates(sysparams,vks,25,2,ys(:,1))
+          call calceigenstates(sysparams,vks,25,3,wave)
+          ys(:,1)=wave(:,1)
        else
           call calcalleigenstates(ntot1,T,vks,eigenstates)
           if (i.gt.1) then
@@ -429,6 +477,9 @@ contains
              ys(:,1)=ys(:,1)+occ(j,1)*eighold(:,j,1)
              ys(:,2)=ys(:,2)+occ(j,2)*eighold(:,j,2)
           end do
+          if (sysparams%occupy_case==0.and.sysparams%singlet==1) then
+             ys(:,2)=ys(:,1)
+          end if
           do j=1,2
              ys(:,j)=ys(:,j)/sqrt(abs(dot_product(ys(:,j),ys(:,j))))
           end do
@@ -444,7 +495,8 @@ contains
        end if
        
        if (sysparams%nd>1) then
-          call calceigenstates(sysparams,vks,25,2,ys(:,2))
+          call calceigenstates(sysparams,vks,25,3,wave)
+          ys(:,2)=wave(:,1)
        end if
        dp =0.d0
        ener=0.d0
@@ -463,10 +515,11 @@ contains
           if (errornew.lt.errorold.and.(i/1000)*1000==i) then
           prefac=prefac*1.1d0
           end if
-       if (errornew.lt.1.d-11) then
+       if (errornew.lt.ecut) then
+          success=1
           exit
        end if
-       if (abs(errornew-errorold)/errornew.lt.1.d-12.and.errornew.gt.1.d-6) then
+       if (abs(errornew-errorold)/errornew.lt.1.d-14.and.errornew.gt.1.d-6) then
           call random_number(vks)
           vks=vks+v1
           prefac=0.1d0
@@ -482,6 +535,7 @@ contains
        end if
        vks=vks-(ener+15.d0)/2.d0
     end do
+    vksout=vks
     if (sysparams%nd==1) then
        deallocate(eigenstates)
     end if
@@ -560,4 +614,302 @@ contains
     end do
     yh=yh/norm(yh)
   end subroutine initial_state_3d
+
+  
+  !calculates eigenstates of a system defined by sysparams with potential vks
+  subroutine calceigenstates(sysparams,vks,niter,nev,yout,eigenvalues)
+    use derivedtypes
+    use sortmod
+    use matmul_mod
+    use hamiltonian_mod
+    !np1: number of points in 1D grid points
+    !npc: number of particles
+    !nd: number of dimensions
+    !niter: number of iterations, block size for either
+    !       short iterative arnoldi or implicitly restarted arnoldi
+    !ntsteps: If ntsteps=0, time-independent energy calculation
+    !T:    Matrix of 1D 2nd derivative np1 x np1 matrix
+    !vks:  Vector of potential at each grid point last dimension fast
+    !      Lexigraphical order
+    !dx    Grid spacing
+    !dtin  Time step
+    !yin   Starting vector before time step
+    !neigs How many eigenvalues to calculate if ntsteps=0
+    type(systemparameters), intent(in) :: sysparams
+    integer, intent(in) :: niter
+    real(8), intent(in) :: Vks(:)!,Vks(np1**npc**nd)
+    integer, intent(in):: nev
+    complex(8), optional, intent(out) :: yout(:,:)
+    real(8), optional, intent(out) :: eigenvalues(nev)
+    integer Np1,ntot,npc,nd
+    real(8), allocatable :: T(:,:)!T(np1,np1)
+    integer :: neigs
+    real(8), allocatable :: veigs(:)
+    real(8), allocatable :: wffunc(:,:)
+    complex(8), allocatable :: vec(:),vecp(:),vecpp(:)
+    integer :: i,j,k,ip
+    integer :: s,c
+    real(8), allocatable :: valwf(:,:,:)
+    integer :: info,iter
+    integer, allocatable :: ind(:,:)
+    integer, allocatable :: pind(:,:,:)
+    real(8) :: tol
+    integer :: ido,ds,df,dsp,dfp,iv
+    integer, allocatable :: iparam(:),ipntr(:)
+    real(8), allocatable :: resid(:),workd(:),workl(:)
+    real(8), allocatable :: qs(:,:)
+    integer :: lworkl
+    logical :: rvec
+    character(1) :: howmny
+    character(12) :: filename
+    logical, allocatable :: select(:)
+    real(8) :: sigmar,sigmai
+    real(8), allocatable :: DR(:),DI(:),Zeig(:,:),workev(:)
+    include 'mkl_blas.fi' 
+    Np1=sysparams%np1
+    ntot=sysparams%ntot
+    npc=sysparams%npart
+    nd=sysparams%nd
+    allocate(T(np1,np1))
+    T=sysparams%T
+   
+    if (sysparams%singlet==1) then
+       singlet=.TRUE.
+    else
+       singlet=.False.
+    end if
+    if (sysparams%triplet==1) then
+       triplet=.TRUE.
+    else
+       triplet=.False.
+    end if 
+    neigs=nev
+    allocate(ind(ntot,3))
+    allocate(pind(np1,np1,np1))
+    !index vector, only works for 1 or two dimensional grid right now
+    ip=0
+    if (npc==2) then
+       do i=1,np1
+          do j=1,np1
+             ip=ip+1
+             ind(ip,1)=i
+             ind(ip,2)=j
+             iv=(np1+1)/2
+             pind(i,j,iv)=ip
+          end do
+       end do
+    elseif(npc==1.and.nd==1) then
+       do i=1,np1
+          ip=ip+1
+          ind(ip,1)=i
+          iv=(np1+1)/2
+          pind(i,iv,iv)=ip
+       end do
+    else
+       do i=1,np1
+          do j=1,np1
+             do k=1,np1
+                ip=ip+1
+                
+                ind(ip,1)=i
+                ind(ip,2)=j
+                ind(ip,3)=k
+                pind(i,j,k)=ip
+             end do
+          end do
+       end do
+    end if
+
+
+
+    allocate(vecpp(ntot),vecp(ntot),vec(ntot))
+    allocate(wffunc(ntot,Neigs))
+    allocate(veigs(neigs+1))
+    !force asymmetry under exchange of wavefunction
+    !if two electrons
+    if (npc==2) then
+       call forcesymc(vecpp,Np1,Ntot)
+    end if
+    roswitch=0
+    allocate(reord(ntot,3))
+    
+    
+
+    
+    iter=niter
+    allocate(qs(ntot,niter))
+    call random_number(qs(:,1))
+    vecp=qs(:,1)
+    vecp=vecp/dsqrt(dble(zdotc(ntot,vecp,1,vecp,1)))
+    qs(:,1)=dble(vecp)
+    if (npc==2) then
+       call forcesym(qs(:,1),Np1,Ntot)
+    end if
+    if (npc==1) then
+       call forcesym1(qs(:,1),Np1)
+    end if
+    
+    !vecp=qs(:,1)
+    !vecp=vecp/sqrt(zdotc(ntot,vecp,1,vecp,1))
+    
+    qs(:,1)=qs(:,1)/dsqrt(ddot(ntot,qs(:,1),1,qs(:,1),1))
+    !ARPACK input parameters
+    allocate(iparam(11))
+    allocate(ipntr(14))
+    lworkl=3*iter**2+6*iter
+    allocate(workl(lworkl))
+    allocate(resid(ntot))
+    allocate(workd(3*ntot))
+    iparam(1)=1
+    iparam(3)=2*iter
+    iparam(4)=1
+    iparam(7)=1
+    ipntr(1)=1
+    tol=1.d-14!epsilon(1.d0)
+    ido=0
+    info=1
+    resid=qs(:,1)
+    workd(1:ntot)=qs(:,1)
+    workd(ntot+1:2*ntot)=qs(:,1)
+    workd(2*ntot+1:3*ntot)=qs(:,1)
+
+    !print*,'step',tsteps
+    arpack:do
+       !call dnaupd(ido,'I',ntot,'SR',Neigs,tol,resid,niter,&
+       !     qs(:,1:niter),ntot,iparam,ipntr,workd,workl,lworkl,info)
+       call dsaupd(ido,'I',ntot,'SA',Neigs,tol,resid,niter,&
+            qs(:,1:niter),ntot,iparam,ipntr,workd,workl,lworkl,info)
+
+       !hamiltonian times vector section
+       if (ido.eq.-1.or.ido.eq.1) then
+          
+          ds=ipntr(1)
+          df=ipntr(1)+ntot-1
+          if (npc==2) then
+             call forcesym(workd(ds:df),Np1,Ntot)
+          end if
+          if (npc==1) then
+             !call forcesym1(workd(ds:df),Np1)
+          end if
+          dsp=ipntr(2)
+          dfp=ipntr(2)+ntot-1
+          vecp=workd(ds:df)
+       
+          !Apply hamiltonian to vecp
+          !vec=H*vecp
+          if (npc==1) then
+             if (nd==1) then
+                vec=matmul(T,vecp)+vks*vecp
+             elseif (nd==2) then
+                vec=matmulac2(T,vecp,ntot)+vks*vecp
+             elseif (nd==3) then
+                !vec=matmulac(T,vecp,ntot)+vks*vecp
+                vec=matmulac(T,vecp,ntot)
+                call zaxpy(ntot,dcmplx(1.d0,0.d0),vtimeszv(vks,vecp,ntot),1,vec,1)
+             else
+                print*,'code not written for these parameters'
+                print*,'stopping'
+                stop
+             end if
+          elseif (npc==2) then
+             if (nd==1) then
+                vec=matmulac2(T,vecp,ntot) +vks*vecp
+             else
+                print*,'code not written for these parameters'
+                print*,'stopping'
+                stop
+             end if
+          elseif (npc==3) then
+             if (nd==1) then
+                vec=matmulac(T,vecp,ntot)+vks*vecp
+             else
+                print*,'code not written for these parameters'
+                print*,'stopping'
+                stop
+             end if
+          end if
+
+
+          !ensure appropriate symmetry remains
+          
+          if (npc==2) then
+             workd(dsp:dfp)=dble(vec)
+             call forcesym(workd(dsp:dfp),Np1,Ntot)
+          else
+             workd(dsp:dfp)=dble(vec)
+             if (npc==1) then
+                call forcesym1(workd(dsp:dfp),Np1)
+             end if
+             workd(dsp:dfp)=workd(dsp:dfp)-2.d0*workd(ds:df)
+          end if
+       else
+          !print*,'ido',ido
+          exit arpack
+       end if
+    end do arpack
+
+    
+
+    !calculate time-independant eigenvalues/eigenvectors
+    rvec=.True.
+    howmny='A'
+    !allocate(DR(Neigs+1),DI(Neigs+1),Zeig(ntot,Neigs+1),workev(3*iter))
+    allocate(DR(Neigs),DI(Neigs),Zeig(ntot,Neigs),workev(3*iter))
+    allocate(select(iter))
+    select=.TRUE.
+    sigmar=0.d0
+    sigmai=0.d0
+    zeig=qs(:,1:Neigs+1)
+    !call dneupd2(rvec,howmny,select,dr,di,zeig,ntot,sigmar,sigmai,workev,&
+    !     'I',ntot,'SR',Neigs,tol,resid,iter,qs(:,1:iter),ntot,iparam,&
+    !     ipntr,workd,workl,lworkl,info)
+    call dseupd(rvec,howmny,select,dr,zeig,ntot,sigmar,&
+         'I',ntot,'SA',Neigs,tol,resid,iter,qs(:,1:iter),ntot,iparam,&
+         ipntr,workd,workl,lworkl,info)
+    if (npc==1) then
+       veigs(1:neigs)=(dr(1:neigs)+2.d0)
+       if (present(eigenvalues)) then
+          eigenvalues=dr(1:nev)+2.d0
+       end if
+    else
+       veigs=dr
+       if (present(eigenvalues)) then
+          eigenvalues=dr(1:nev)
+       end if
+       !print*,(di(1:Neigs))!*219474.63
+    end if
+    
+    wffunc=zeig(:,1:neigs) 
+    deallocate(DR,DI,Zeig,workev)
+    deallocate(select)
+    deallocate(qs)
+
+
+
+    if (present(yout)) then
+       !transfer eigenvectors to yout
+       yout(:,1:nev)=wffunc(:,1:nev)
+    end if
+       
+    
+    
+    deallocate(iparam)
+    deallocate(ipntr)
+    deallocate(workl)
+    deallocate(resid)
+    deallocate(workd)
+    
+
+
+    deallocate(reord)
+    deallocate(vecpp,vecp,vec)
+    deallocate(wffunc)
+    deallocate(veigs)
+    deallocate(ind)
+    deallocate(pind)
+
+  end subroutine calceigenstates
+
+
+  
 end Module initial_states

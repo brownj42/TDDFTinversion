@@ -68,7 +68,7 @@ for loop in range(5000):
     td.density.calcddnx(sysparams,sharedvals,sysparams.ntot1,psinew,fullvals.v,ddnxnew)
     
     #Attempt to advance KS system
-    info=td.ksadvance_mod.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
+    info=td.propagate.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
     
     if (info==1):#succesful advance of orbitals shift full wavefunction
         fullvals.psi=psinew

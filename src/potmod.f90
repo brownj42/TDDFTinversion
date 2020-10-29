@@ -39,10 +39,11 @@ contains
   end subroutine generate_1bodypot
 
   !Generates the 2body potential for different input parameters
-  subroutine generate_2bodypot(sysparams,sharedvals)
+  subroutine generate_2bodypot(sysparams,sharedvals,sc)
     use derivedtypes
     type(systemparameters), intent(in) :: sysparams
     type(sharedvalues), intent(inout) :: sharedvals
+    real(8), intent(in), optional :: sc
     integer :: nd,npart,np1,ntot1,ntot2,ntot
     integer :: i,j
     nd=sysparams%nd
@@ -51,11 +52,16 @@ contains
     ntot2=sysparams%ntot2
     ntot=sysparams%ntot
     npart=sysparams%npart
+       
     
     if (sysparams%quantization==1) then
        if (npart==2.and.nd==1) then
           !generate full two-body potential
-          sharedvals%vinteract=pot_interaction(np1,ntot2,sysparams%xlattice)
+          if (present(sc)) then
+             sharedvals%vinteract=pot_interaction(np1,ntot2,sysparams%xlattice,sc)
+          else
+             sharedvals%vinteract=pot_interaction(np1,ntot2,sysparams%xlattice,0.1d0) 
+          end if
        elseif(npart==1) then
           sharedvals%vinteract=0.d0
        end if
@@ -94,7 +100,7 @@ contains
     if (sysparams%quantization==1) then 
        if (npart==2.and.nd==1) then
           !generate full two-body potential
-          fullvals%v=pot2particle(ntot1,ntot2,sharedvals%v1,sharedvals%vinteract)
+          call pot2particle(ntot1,ntot2,sharedvals%v1,sharedvals%vinteract,fullvals%v)
        elseif(npart==1) then
           fullvals%v=sharedvals%v1
        end if
@@ -146,26 +152,25 @@ contains
     end do
   end function pot1d_2
 
-  function pot_interaction(np1,ntot2,xlattice) result(vinteract)
+  function pot_interaction(np1,ntot2,xlattice,sc) result(vinteract)
     integer :: np1,ntot2
     real(8) :: xlattice(np1)
     real(8) :: vinteract(ntot2)
     real(8) :: sc
     integer :: i,j,l
     l=0
-    sc=0.1d0
     do i=1,np1
        do j=1,np1
           l=l+1
-          vinteract(l)=1.d0/(sqrt((xlattice(i)-xlattice(j))**2)+sc)
+          vinteract(l)=1.d0/sqrt((xlattice(i)-xlattice(j))**2+sc)
        end do
     end do
   end function pot_interaction
 
-  function pot2particle(ntot1,ntot2,v1,vinteract) result(v)
-    integer :: ntot1,ntot2
-    real(8) :: v1(ntot1),vinteract(ntot2)
-    real(8) :: v(ntot2)
+  subroutine pot2particle(ntot1,ntot2,v1,vinteract,v)
+    integer, intent(in) :: ntot1,ntot2
+    real(8), intent(in) :: v1(ntot1),vinteract(ntot2)
+    real(8), intent(out) :: v(ntot2)
     integer :: i,j,l
     l=0
     do i=1,ntot1
@@ -174,28 +179,60 @@ contains
           v(l)=v1(i)+v1(j)+vinteract(l)
        end do
     end do
-  end function pot2particle
+  end subroutine pot2particle
   
   !adds the driving potential for the 1D 2-electron example
-  subroutine add_driving_potential(sysparams,sharedvals,fullvals)
+  subroutine add_driving_potential(sysparams,sharedvals,fullvals,prefactor)
     use derivedtypes 
     type(systemparameters), intent(in) :: sysparams
     type(sharedvalues), intent(inout) :: sharedvals
     type(fullvalues), intent(inout) :: fullvals
+    real(8), optional, intent(in) :: prefactor
     integer :: np1
     real(8), allocatable :: xlattice(:)
+    real(8) :: prefac
     integer :: i,j,l
     l=0
+    if (present(prefactor)) then
+       prefac=prefactor
+    else
+       prefac=-0.1d0
+    end if
     np1=sysparams%np1
     allocate(xlattice(np1))
     xlattice=sysparams%xlattice
     do i=1,np1
        do j=1,np1
           l=l+1
-          fullvals%v(l)=fullvals%v(l)-0.1d0*(xlattice(i)+xlattice(j))
+          fullvals%v(l)=sharedvals%vinteract(l)+&
+                        sharedvals%vin(i)+sharedvals%vin(j)+&
+                        prefac*(xlattice(i)+xlattice(j))
        end do
-       sharedvals%v1(i)=sharedvals%v1(i)-0.1d0*xlattice(i)
-       sharedvals%vin(i)=sharedvals%vin(i)-0.1d0*xlattice(i)
+       sharedvals%v1(i)=sharedvals%vin(i)+prefac*xlattice(i)
+       !sharedvals%vin(i)=sharedvals%vin(i)+prefac*xlattice(i)
     end do
   end subroutine add_driving_potential
+  
+  !adds the driving potential for the 1D 2-electron example
+  subroutine calculate_driving_pot(sysparams,prefactor,potder)
+    use derivedtypes 
+    type(systemparameters), intent(in) :: sysparams
+    real(8), intent(in) :: prefactor
+    real(8), intent(inout) :: potder(:)
+    integer :: np1
+    real(8), allocatable :: xlattice(:)
+    real(8) :: prefac
+    integer :: i,j,l
+    l=0
+    prefac=prefactor
+    np1=sysparams%np1
+    allocate(xlattice(np1))
+    xlattice=sysparams%xlattice
+    do i=1,np1
+       do j=1,np1
+          l=l+1
+          potder(l)=prefac*(xlattice(i)+xlattice(j))
+       end do
+    end do
+  end subroutine calculate_driving_pot 
 end Module potential

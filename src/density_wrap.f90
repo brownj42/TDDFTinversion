@@ -111,6 +111,54 @@ contains
     end if
   end subroutine calcdnx
   
+  subroutine calcenergy(sysparams,sharedvals,psi,v,energy)
+    use matmul_mod
+    use derivedtypes
+    type(systemparameters), intent(in) :: sysparams
+    type(sharedvalues), intent(in) :: sharedvals
+    complex(8),intent(in) :: psi(:)
+    real(8),intent(in) :: v(:)
+    real(8), intent(out) :: energy
+    integer :: np1,nd,npart,ntot
+    real(8), allocatable :: T(:,:)
+    complex(8), allocatable :: hpsi(:)
+    real(8), allocatable :: dnx2(:)
+    integer :: i
+    include 'mkl_blas.fi'
+    nd=sysparams%nd
+    np1=sysparams%np1
+    npart=sysparams%npart
+    ntot=sysparams%ntot
+    allocate(hpsi(ntot))
+    
+    
+    
+    allocate(T(np1,np1))
+    T=sysparams%T
+    if (sysparams%quantization==1) then
+       if (nd*npart==1) then
+          hpsi=matmul(T,psi)+v*psi
+       elseif (nd*npart==2) then
+          allocate(reord(ntot,3))
+          roswitch=0
+          hpsi=matmulac2(T,psi,ntot)+v*psi
+          deallocate(reord)
+       elseif (nd*npart==3) then
+          allocate(reord(ntot,3))
+          roswitch=0
+          hpsi=matmulac(T,psi,ntot)+v*psi
+          deallocate(reord)
+       else
+          print*,'choice of parameters is not implemented yet'
+          print*,'stopping now'
+          stop
+       end if
+    else
+       print*,'stopping: not implemented yet'
+    end if
+    energy=zdotc(ntot,hpsi,1,psi,1)
+  end subroutine calcenergy
   
+ 
    
 end module density

@@ -191,6 +191,7 @@ contains
        Km=-G*T
        G=0.d0
        do i=1,n
+         !print*,Km(i,i),diagy(i)
          Km(i,i)=Km(i,i)-diagy(i)
          G(i,i)=sqrt(mm1(i))
        end do

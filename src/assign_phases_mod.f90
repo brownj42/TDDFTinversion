@@ -38,7 +38,7 @@ Contains
           !abspsii(:,j)=abs(psii(:,j))
           abspsii(:,j)=absvec(n,psii(:,j))
        end do
-       newton:do ctr=1,4
+       newton:do ctr=1,14
           new_phases=newton_step(psif,dn_aim,T,np1,nd,n,npart)
           do j=1,npart
              psif(:,j)=abspsii(:,j)*zexp(j1*new_phases((j-1)*n+1:j*n))
@@ -100,7 +100,7 @@ Contains
        !OMP parallel shared(ph,v) firstprivate(npart,p,n,ps) default(private) 
        !OMP do schedule(static,4)
        do i=1,n
-          ph(ps+i)=atan2(aimag(v(i,p)),real(v(i,p)))
+          ph(ps+i)=datan2(dimag(v(i,p)),dble(v(i,p)))
        end do
        !OMP end do nowait
        !OMP end parallel
@@ -109,6 +109,7 @@ Contains
   
   !function that takes step in direction of improved phases
   function newton_step(y,dn_aim,T,np1,nd,n,npart) result(phases)
+    !use derivedtypes
     use lsqrdatamodule
     use pot_invert_mod 
     use lsqrmodule
@@ -128,6 +129,7 @@ Contains
     real(8) :: step(n*npart)
     real(8) :: rgp(n),ry(n,npart),iy(n,npart),dy(n,npart),Mm1(n*npart),maxit,mms(n)
     real(dp) :: se(n)
+    real(8), allocatable :: G(:,:),Km(:,:)
     complex(8) :: ty(n)
     integer :: sn3,p,ps,i,nnp
     integer :: istop, itn,np,loc(1,npart)
@@ -255,10 +257,29 @@ Contains
     rgp=vtimesv(rgp,mWs,n)
     open(111, file='LSQR.txt')
     if (nd==1) then
-       call LSQR(n,nnp,Aprodw1, Aprodw2, rgp, 0.d0, .false.,       &
-                     step, se,                                         &
-                     1.d-15,1.d-15, 1.d5, nnp,111,              &
+       
+       if (npart==1) then
+          allocate(G(n,n),km(n,n))
+          G=0.d0
+          !print*,'balyb'
+          G=2.d0*dble(matmul(y(:,1:1),dconjg(transpose(y(:,1:1)))))
+          Km=-G*mT
+          G=0.d0
+          do i=1,n
+             Km(i,i)=Km(i,i)-dy(i,1)
+             G(i,i)=mws(i)
+          end do
+          G=matmul(G,matmul(Km,G))
+          !print*,'balyb'
+          call pinv(G,n,n,1.d-15,km)
+          step=matmul(km,rgp)
+          deallocate(G,km)
+       else
+          call LSQR(n,nnp,Aprodw1, Aprodw2, rgp, 0.d0, .false.,   &
+                     step, se,                                    &
+                     1.d-15,1.d-15, 1.d5, 2*nnp,111,              &
                      istop, itn, Anorm, Acond, rnorm, Arnorm, xnorm )
+       end if
     else if (nd==3) then
        call LSQR(n,nnp,Aprodw1_3d, Aprodw2_3d, rgp, 0.d0, .false.,       &
                      step, se,                                         &

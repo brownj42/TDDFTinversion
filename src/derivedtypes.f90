@@ -30,6 +30,10 @@ module derivedtypes
 
   type ksvalues
      complex(8), allocatable :: phi(:,:) !KS orbtial
+     complex(8), allocatable :: interphi(:,:,:) !intermediate KS orbitals
+     real(8), allocatable :: intervks(:,:) !intermediate Vks potentials
+     integer :: numinter !number of intermediate steps
+     integer :: init !if init=0, not initialized properly, if init=1 properly initialized
      real(8), allocatable :: vks(:) !current Vks potential
      real(8), allocatable :: vksh(:) !previous Vks potential - external 1-body potential
      real(8), allocatable :: vkshh(:) !second previous Vks potential - 1-body potential
@@ -152,12 +156,18 @@ contains
         allocate(KSvals%vks(ntot1),KSvals%vksh(ntot1),KSvals%vkshh(ntot1))
         allocate(KSvals%vhar(ntot1),KSvals%dvks(ntot1),KSvals%dvksh(ntot1))
         allocate(KSvals%dp(ntot1))
+        allocate(KSvals%interphi(ntot1,npart,5))
+        allocate(KSvals%intervks(ntot1,5))
         KSvals%vks=0.d0
         KSvals%vksh=0.d0
         KSvals%vkshh=0.d0
         KSvals%vhar=0.d0
         KSvals%dvks=0.d0
         KSvals%dvksh=0.d0
+        KSvals%init=0
+        KSvals%numinter=0
+        KSvals%interphi=0.d0
+        KSvals%intervks=0.d0
      end subroutine init_ksvalues
 
      subroutine destroy_ksvalues(ksvals)
@@ -170,6 +180,8 @@ contains
         if (allocated(ksvals%dvks)) deallocate(ksvals%dvks)
         if (allocated(ksvals%dvksh)) deallocate(ksvals%dvksh)
         if (allocated(ksvals%dp)) deallocate(ksvals%dp)
+        if (allocated(ksvals%interphi)) deallocate(ksvals%interphi)
+        if (allocated(ksvals%intervks)) deallocate(ksvals%intervks)
      end subroutine destroy_ksvalues
 
 end module derivedtypes

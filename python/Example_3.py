@@ -1,7 +1,7 @@
 import TDDFTinversion as td
 import numpy as np
 
-np1=71 #number of grid points for 1-dimension
+np1=145 #number of grid points for 1-dimension
 #initialize systemparameters derived type
 sysparams=td.derivedtypes.init_systemparameters(np1)
 sysparams.nd=1 #number of dimensions
@@ -45,13 +45,13 @@ psinew=np.zeros(sysparams.ntot,dtype=np.complex128)
 td.density.fullwf_density(sysparams,fullvals.psi,dpe)
 
 #initialize KS orbitals system to match dpe
-KSvals=td.initial_states.initializekssystem(sysparams,sharedvals,dpe,fullvals)
+KSvals=td.initial_states.initializekssystem(sysparams,sharedvals,dpe)
 
 #add driving potential for example 2
 if (sysparams.npart==2):
     td.potential.add_driving_potential(sysparams,sharedvals,fullvals)
     
-sysparams.dt=sysparams.dth/1
+sysparams.dt=sysparams.dth/2
 for loop in range(5000):
     print('\n')
     print('For time '+str(sysparams.ct)+' to ',str(sysparams.ct+sysparams.dt))
@@ -70,7 +70,7 @@ for loop in range(5000):
     td.density.calcddnx(sysparams,sharedvals,sysparams.ntot1,psinew,fullvals.v,ddnxnew)
     
     #Attempt to advance KS system
-    info=td.ksadvance_mod.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
+    info=td.propagate.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
     
     if (info==1):#succesful advance of orbitals shift full wavefunction
         fullvals.psi=psinew

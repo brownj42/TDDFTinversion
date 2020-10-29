@@ -2,7 +2,7 @@
 #                   define the compiler names
 #=======================================================================
 
-CC       = g++
+CC       = gcc
 F90      = gfortran
 #F90      = ifort
 #F90      =  /opt/intel/composer_xe_2015.3.187/bin/intel64/ifort
@@ -14,10 +14,10 @@ PYTHON   = python3
 
 ifeq ($(F90),gfortran)
 	FPP      = gfortran -E
-	FPP_F90FLAGS = -x f95-cpp-input -fPIC
-	F90FLAGS = -fPIC -fopenmp
+	FPP_F90FLAGS = -x f95-cpp-input -fPIC -fdefault-real-8 -fdefault-double-8
+	F90FLAGS = -fPIC -fopenmp -fdefault-real-8 -fdefault-double-8
     FCOMP    = gfortran
-    LIBS= -L/usr/lib64 -larpack -lopenblas_openmp -llapack -fopenmp  -lm 
+    LIBS= -L/usr/lib64 -larpack -llapack -lopenblas_openmp -lm -lgomp
 endif
 
 ifeq ($(F90),ifort)
@@ -61,7 +61,7 @@ KIND_MAP = kind_map
 #=======================================================================
 
 # names (without suffix), f90 sources
-LIBSRC_SOURCES= nchoosekmod mapmod matmul_mod minresqlpDataModule lsqrDataModule lsqrblasInterface lsqrModule minresqlpBlasModule minresqlpModule derivedtypes secondquant_mod secondquant_wrap keomod potmod sortmod pot_invert_mod density_mod density_wrap assign_phases_mod hamiltonian_mod hamiltonian_wrap initial_states_mod outputdata_mod KSadvance_mod 
+LIBSRC_SOURCES= nchoosekmod mapmod matmul_mod minresqlpDataModule lsqrDataModule lsqrblasInterface lsqrModule minresqlpBlasModule minresqlpModule derivedtypes secondquant_mod secondquant_wrap keomod potmod sortmod pot_invert_mod density_mod density_wrap assign_phases_mod hamiltonian_mod outputdata_mod hamiltonian_wrap initial_states_mod
 
 # file names
 LIBSRC_FILES = $(addsuffix .f90,${LIBSRC_SOURCES})
@@ -77,7 +77,7 @@ LIBSRC_FPP_FILES = $(addsuffix .fpp,${LIBSRC_SOURCES})
 #=======================================================================
 
 # names (without suffix), f90 sources
-LIBSRC_WRAP_SOURCES = derivedtypes secondquant_wrap keomod density_wrap hamiltonian_wrap potmod initial_states_mod KSadvance_mod 
+LIBSRC_WRAP_SOURCES = derivedtypes secondquant_wrap keomod density_wrap hamiltonian_wrap potmod initial_states_mod
 
 # file names
 LIBSRC_WRAP_FILES = $(addsuffix .f90,${LIBSRC_WRAP_SOURCES})
@@ -129,11 +129,11 @@ libsrc.a: ${LIBSRC_OBJECTS}
 
 _${PYTHON_MODN}.so: libsrc.a ${LIBSRC_FPP_FILES}
 	f90wrap -m ${PYTHON_MODN} ${LIBSRC_WRAP_FPP_FILES} -k ${KIND_MAP} -v
-	f2py-f90wrap --fcompiler=$(FCOMP) --build-dir . -L/usr/lib64 -larpack -lopenblas_openmp -llapack -lgomp -c -m _${PYTHON_MODN} -L. -lsrc f90wrap*.f90
+	f2py-f90wrap --fcompiler=$(FCOMP) --build-dir . -c -m _${PYTHON_MODN} -L. -lsrc ${LIBS} f90wrap*.f90
 
 
 _${PYTHON_MODN}_pkg.so: libsrc.a ${LIBSRC_FPP_FILES}
 	f90wrap -m ${PYTHON_MODN}_pkg ${LIBSRC_WRAP_FPP_FILES} -k ${KIND_MAP} -v -P
-	f2py-f90wrap --fcompiler=$(FCOMP) --build-dir . -L/usr/lib64 -larpack -lopenblas_openmp -llapack -lgomp -c -m _${PYTHON_MODN}_pkg -L. -lsrc f90wrap*.f90
+	f2py-f90wrap --fcompiler=$(FCOMP) --build-dir . -c -m _${PYTHON_MODN}_pkg  -L. -lsrc ${LIBS} f90wrap*.f90
 
 

@@ -21,7 +21,6 @@ contains
     !      Lexigraphical order
     !dx    Grid spacing
     !yout
-    !nev How many eigenvalues to calculate
     type(systemparameters), intent(in) :: sysparams
     type(sharedvalues), intent(in) :: sharedvals
     integer, intent(in)  :: niter
@@ -273,9 +272,10 @@ contains
    real(8), allocatable :: vksp(:)
    complex(8), allocatable :: phiminus(:),phiplus(:),f(:),phinew(:)
    complex(8), parameter :: j1=dcmplx(0.d0,1.d0)
-   integer :: i,np1,nd,ntot
+   integer :: i,np1,nd,ntot,npart
    real(8) :: dt
 
+   npart=sysparams%npart
    np1=sysparams%Np1
    ntot=sysparams%ntot
    dt=sysparams%dt
@@ -284,7 +284,7 @@ contains
    allocate(phinew(sysparams%ntot),f(ntot))
    !do first part of propagation 
    if (present(dvks)) then
-      f=calcf1(np1,nd,ntot,dt,sysparams%T,vin,vks,dvks,yin)
+      f=calcf1(np1,npart*nd,ntot,dt,sysparams%T,vin,vks,dvks,yin)
    else
       f=0.d0
    end if
@@ -292,7 +292,7 @@ contains
    call advancewf(sysparams,sharedvals,niter,vin,phiminus,phiplus)
    !iterate solution
    if (present(dvksnew)) then
-      f=calcf1(np1,nd,ntot,dt,sysparams%T,vin,vksnew,dvksnew,yin)
+      f=calcf1(np1,npart*nd,ntot,dt,sysparams%T,vin,vksnew,dvksnew,yin)
       yout=yin
       phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
       td:do i=1,30
@@ -300,7 +300,7 @@ contains
             exit td
          else
             yout=phinew
-            f=calcf1(np1,nd,ntot,dt,sysparams%T,vin,vksnew,dvksnew,yout)
+            f=calcf1(np1,nd*npart,ntot,dt,sysparams%T,vin,vksnew,dvksnew,yout)
             phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
          end if
       end do td
@@ -310,6 +310,73 @@ contains
 
   end subroutine advancewftd
 
+  subroutine advancewftd_absorb(sysparams,sharedvals,niter,vin,vks,vksnew,dvks,dvksnew,yin,yout)
+   !subroutine used to advance the wavefunction yin by sysparams%dt to yout
+   !The time derivative of the potential at t and t+dt are optional, if they are present, a higher order
+   !method is used to advance the system in time.
+   use derivedtypes
+   use hamiltonian_mod
+   type(systemparameters), intent(in) :: sysparams
+   type(sharedvalues), intent(in) :: sharedvals
+   integer, intent(in)  :: niter
+   real(8), intent(in) :: vin(:)
+   complex(8), intent(in) :: Vks(:),vksnew(:)!changed to complex to allow absorbing potential
+   real(8), intent(in), optional :: dvks(:),dvksnew(:)
+   complex(8), intent(in) :: yin(:)
+   complex(8), intent(out) :: yout(:)
+   real(8), allocatable :: vksp(:)
+   complex(8), allocatable :: phiminus(:),phiplus(:),f(:),phinew(:)
+   real(8), allocatable :: expvks(:)
+   complex(8), parameter :: j1=dcmplx(0.d0,1.d0)
+   integer :: i,np1,nd,ntot,npart
+   real(8) :: dt
+
+   npart=sysparams%npart
+   np1=sysparams%Np1
+   ntot=sysparams%ntot
+   dt=sysparams%dt
+   nd=sysparams%nd
+   
+   allocate(vksp(sysparams%ntot),phiminus(sysparams%ntot),phiplus(sysparams%ntot))
+   allocate(phinew(sysparams%ntot),f(ntot),expvks(ntot))
+   expvks=exp(dt/2.d0*dimag(vks))
+   !phinew=expvks*yin
+   !do first part of propagation 
+   if (present(dvks)) then
+      f=calcf1c(np1,npart*nd,ntot,dt,sysparams%T,vin,vks,dvks,yin)
+      !f=calcf1(np1,npart*nd,ntot,dt,sysparams%T,vin,dble(vks),dvks,phinew)
+   else
+      f=0.d0
+   end if
+   
+   phiminus=yin-dt*j1/2.d0*vks*yin-f
+   !phiminus=phinew-dt*j1/2.d0*dble(vks)*phinew-f
+   call advancewf(sysparams,sharedvals,niter,vin,phiminus,phiplus)
+   !iterate solution
+   if (present(dvksnew)) then
+      f=calcf1c(np1,npart*nd,ntot,dt,sysparams%T,vin,vksnew,dvksnew,yin)
+      !f=calcf1(np1,npart*nd,ntot,dt,sysparams%T,vin,dble(vksnew),dvksnew,phinew)
+      yout=yin
+      phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*dble(vksnew))
+      td:do i=1,30
+         if (abs(dot_product(yout-phinew,yout-phinew)).lt.1.d-32) then
+            exit td
+         else
+            yout=phinew
+            f=calcf1c(np1,nd*npart,ntot,dt,sysparams%T,vin,vksnew,dvksnew,yout)
+            phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
+            !f=calcf1(np1,nd*npart,ntot,dt,sysparams%T,vin,dble(vksnew),dvksnew,yout)
+            !phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*dble(vksnew))
+         end if
+      end do td
+   else
+      yout=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
+      !yout=(phiplus+f)/(1.d0+dt*j1/2.d0*dble(vksnew))
+   end if
+   !yout=expvks*yout
+
+  end subroutine advancewftd_absorb
+  
   subroutine advanceKSsystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals,info)
    !The subroutine that implements that main method to advance the KSorbitals and calculate the 
    !corresponding TDDFT potential. The five vectors required to advance from ct to ct+dt are:
@@ -427,11 +494,17 @@ contains
       if (loop==2.and.sysparams%outputdata==1) then
           call printdata(np1,nd,ntot1,npart,xlattice,ct,vks,KSvals%vhar,v1,dp,dpe,phi,sysparams%newfile)
       end if
+      KSvals%numinter=1
+      ksvals%interphi(:,:,ksvals%numinter)=phi
+      ksvals%intervks(:,ksvals%numinter)=vks
    else
       enerh=sysparams%energy
-      !call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnx,phi,vks)
-      !call recenter_potential(np1,nd,ntot1,npart,enerh,T,phi,vks)
-      !call calcdvks(np1,nd,ntot1,npart,swh+sw,enerh,dt,T,vin,phi,dvksmax,vkshh,vksh,vks,dvks)
+      call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnx,phi,vks)
+      call recenter_potential(np1,nd,ntot1,npart,enerh,T,phi,vks)
+      call calcdvks(np1,nd,ntot1,npart,swh+sw,enerh,dt,T,vin,phi,dvksmax,vkshh,vksh,vks,dvks)
+      KSvals%numinter=1
+      ksvals%interphi(:,:,ksvals%numinter)=phi
+      ksvals%intervks(:,ksvals%numinter)=vks
    end if
    vkshh=vksh
    vksh=vks-vin
@@ -462,6 +535,7 @@ contains
       !take current approximation and calculate corresponding Vks potential
       if (docalcvks==1.and.diff.lt.1.d-32) then
          print*,'Orbitals converged, recalculate potential'
+         
          call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnxnew,phinew,vks)
          !recenter potential to keep energy constant
          call recenter_potential(np1,nd,ntot1,npart,enerh,T,phinew,vks)
@@ -469,6 +543,11 @@ contains
          
          !can try to approximate derivative of potential
          call calcdvks(np1,nd,ntot1,npart,sw,enerh,dt,T,vin,phinew,dvksmax,vkshh,vksh,vks,dvks)
+         if (ksvals%numinter.lt.5) then
+            ksvals%numinter=ksvals%numinter+1
+            ksvals%interphi(:,:,ksvals%numinter)=phinew
+            ksvals%intervks(:,ksvals%numinter)=vks
+         end if
          vks=vks-vin
       end if
       !dvks=0.d0
@@ -488,7 +567,7 @@ contains
       diff=diff/dble(ntot1) 
       !transfer new approximation to output KS orbitals
       phinew=phinew2
-      if (j.gt.1.and.docalcvks==0.and.diff.lt.1.d-16) then
+      if (j.gt.1.and.docalcvks==0.and.diff.lt.1.d-13) then
          if (vksconverged==0) then
             print*,'Potential Converged'
          end if
@@ -597,4 +676,316 @@ contains
 
   end subroutine advanceKSsystem
 
+  subroutine advanceKSsystem_singlet(dpe,dpenew,dnx,dnxnew,ddnx,ddnxnew,sysparams,KSvals,sharedvals,info)
+   !The subroutine that implements that main method to advance the KSorbitals and calculate the 
+   !corresponding TDDFT potential. The five vectors required to advance from ct to ct+dt are:
+   !dnx: The time derivative of the density at time t
+   !dpe: The density at time t
+   !dpenew: The density at time t+dt
+   !ddnx: The second time-derivative of the density at time t
+   !ddnxnew: The second time-derivative of the density at time t+dt
+   !if after attempted time step, info=1 the orbitals have advanced and vks at time t+dt is stored in
+   !KSvals along with the new orbitals
+   !If after attempted time step, info=0 The time step failed and new dpenew and ddnxnew are requested at
+   !time t+dt where dt is now halved from the previous step.
+   use derivedtypes 
+   use density_mod
+   use hamiltonian_mod
+   use pot_invert_mod
+   use assign_phases_mod
+   use outputdata_mod
+   real(8), intent(in) :: dnx(:),dnxnew(:),dpe(:),dpenew(:),ddnx(:),ddnxnew(:)
+   type(systemparameters), intent(inout) :: sysparams
+   type(KSvalues), intent(inout) :: KSvals
+   type(sharedvalues), intent(in) :: sharedvals
+   integer, intent(out) :: info
+   type(systemparameters) :: sysparams1part
+   integer :: np1,nd,ntot1,npart,ntot2
+   integer :: niter,sw,swh
+   integer :: loop
+   complex(8), allocatable :: phi(:,:),phihold(:,:),phinew(:,:)
+   complex(8), allocatable :: phinew2(:,:)
+   complex(8), allocatable :: phiplus(:,:),phiminus(:)
+   complex(8), allocatable :: f(:)
+   real(8), allocatable :: vks(:),vksh(:),vkshh(:),dvks(:),dvksh(:)
+   real(8), allocatable :: T(:,:),vin(:),dp(:),xlattice(:)
+   real(8), allocatable :: v1(:),vhar(:)
+   real(8) :: diff,density_error,dt,dth
+   real(8) :: ct,enerh
+   real(8) :: dvksmax
+   integer :: i,j
+   character(20) :: outform 
+   complex(8), parameter :: j1=dcmplx(0.d0,1.d0)
+   integer :: docalcvks,vksconverged
+   integer :: pinv0minresqlp1
+   niter=5
+   !copy system parameters to local variables for ease of reading
+   np1=sysparams%np1
+   nd=sysparams%nd
+   ntot1=sysparams%ntot1
+   ntot2=sysparams%ntot2
+   npart=sysparams%npart
+   sw=sysparams%dvks_sw
+   swh=sysparams%dvksh_sw
+   ct=sysparams%ct
+   dt=sysparams%dt
+   dth=sysparams%dth
+   loop=sysparams%loop
+   dvksmax=sysparams%dvksmax
+   pinv0minresqlp1=sysparams%pinv0minresqlp1
+   if (pinv0minresqlp1==0.and.nd.ne.1) then
+      print*, 'Can only use pseudoinverse in 1D'
+      print*, 'stopping'
+      stop
+   end if
+   allocate(T(np1,np1),xlattice(np1))
+   allocate(vin(ntot1),v1(ntot1))
+   call dcopy(ntot1,sharedvals%vin,1,vin,1)
+   call dcopy(ntot1,sharedvals%v1,1,v1,1)
+   xlattice=sysparams%xlattice
+   T=sysparams%T
+   allocate(sysparams1part%T(np1,np1),sysparams1part%xlattice(np1))
+   sysparams1part=sysparams
+   sysparams1part%npart=1
+   sysparams1part%ntot=ntot1
+
+   !copy Kohn-Sham variables to local variables for ease of reading
+   allocate(phi(ntot1,npart),dp(ntot1),vhar(ntot1))
+   do i=1,npart
+       call zcopy(ntot1,KSvals%phi(:,i),1,phi(:,i),1)
+   end do
+   call dcopy(ntot1,KSvals%dp,1,dp,1)
+   allocate(vks(ntot1),vkshh(ntot1),vksh(ntot1))
+   !vks=KSvals%vks
+   call dcopy(ntot1,KSvals%vks,1,vks,1)
+   !vksh=KSvals%vksh
+   call dcopy(ntot1,KSvals%vksh,1,vksh,1)
+   !vkshh=KSvals%vkshh
+   call dcopy(ntot1,KSvals%vkshh,1,vkshh,1)
+   allocate(dvksh(ntot1),dvks(ntot1))
+   !dvksh=KSvals%dvksh
+   call dcopy(ntot1,KSvals%dvks,1,dvks,1)
+   !dvks=KSvals%dvks
+   call dcopy(ntot1,KSvals%dvksh,1,dvksh,1)
+   vhar=KSvals%vhar
+   !local variables for time-advance
+   allocate(phihold(ntot1,npart))
+   allocate(phinew(ntot1,npart),phinew2(ntot1,npart))
+   allocate(phiminus(ntot1),phiplus(ntot1,npart))
+   allocate(f(ntot1))
+
+
+   !assign phases
+   KSvals%phi(:,1)=dsqrt(dpe/2.d0)*zexp(dcmplx(0.d0,angle(KSvals%phi(:,1:1),ntot1,1)))
+   phihold(:,1:1)=assign_phases(KSvals%phi(:,1:1),dnx/2.d0,T,np1,nd,ntot1,1,1.d-14)
+   !print*,angle(KSvals%phi(:,1:1),ntot1,1)-angle(phihold(:,1:1),ntot1,1)
+   !print*,'breaaaaaaaaaaaaaaaaaaaaaaakkkkkkkkkk'
+   !print*,abs(KSvals%phi(:,1:1))-abs(phihold(:,1:1))
+   !print*,'breaaaaaaaaaaaaaaaaaaaaaaakkkkkkkkkk'
+   !phihold=assign_phases(KSvals%phi,dnx,T,np1,nd,ntot1,npart,1.d-14)
+   phihold(:,2)=phihold(:,1)
+   !shift current orbitals to phi 
+   do i=1,npart
+       call zcopy(ntot1,phihold(:,i),1,phi(:,i),1)
+   end do
+   !calculate vks potential
+   if (loop.le.2) then
+      call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnx,phi,vks)
+      !call calcdvks(np1,nd,ntot1,npart,swh+sw,enerh,dt,T,vin,phi,vkshh,vksh,vks,dvks)
+      enerh=sysparams%energy
+      call recenter_potential(np1,nd,ntot1,npart,enerh,T,phi,vks)
+      dp=ks_density(ntot1,npart,phi)
+      KSvals%vhar=calcvhar(ntot1,npart,ntot2,sharedvals%vinteract,dp)
+      if (loop==2.and.sysparams%outputdata==1) then
+          call printdata(np1,nd,ntot1,npart,xlattice,ct,vks,KSvals%vhar,v1,dp,dpe,phi,sysparams%newfile)
+      end if
+   else
+      enerh=sysparams%energy
+      call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnx,phi,vks)
+      call recenter_potential(np1,nd,ntot1,npart,enerh,T,phi,vks)
+      call calcdvks(np1,nd,ntot1,npart,swh+sw,enerh,dt,T,vin,phi,dvksmax,vkshh,vksh,vks,dvks)
+   end if
+   vkshh=vksh
+   vksh=vks-vin
+   
+   !do first part of propagation for each particle
+   vks=vks-vin
+   do i=1,npart
+      f=calcf1(np1,nd,ntot1,dt,T,vin,vks,dvks,phi(:,i))
+      phiminus=phi(:,i)-dt*j1/2.d0*vks*phi(:,i)-f
+      call advancewf(sysparams1part,sharedvals,niter,vin,phiminus,phiplus(:,i))
+   end do
+
+   !first approximation of next step
+   do i=1,npart
+      phinew(:,i)=(phiplus(:,i)+f)/(1.d0+dt*j1/2.d0*vks)
+   end do
+   !phinew(:,2)=dsqrt(dpenew/2.d0)*zexp(dcmplx(0.d0,angle(phinew(:,1:1),ntot1,1)))
+   !phinew(:,1:1)=assign_phases(phinew(:,2:2),dnxnew/2.d0,T,np1,nd,ntot1,1,1.d-14)
+   !phinew(:,2)=phinew(:,1)
+   !call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnxnew,phinew,vks)
+   !call recenter_potential(np1,nd,ntot1,npart,enerh,T,phinew,vks)
+   !dvksh=dvks
+   !call calcdvks(np1,nd,ntot1,npart,sw,enerh,dt,T,vin,phinew,dvksmax,vkshh,vksh,vks,dvks)
+   !vks=vks-vin
+
+   !iterate and recalculate vks potential until converged
+   dvksh=dvks
+   diff=1.d0 
+   docalcvks=1
+   vksconverged=0
+   swh=sw
+   print*,'Starting advance of KS orbitals'
+   enerh=sysparams%energynew
+   iter:do j=1,100
+
+      !take current approximation and calculate corresponding Vks potential
+      if (docalcvks==1.and.diff.lt.1.d-32) then
+         print*,'Orbitals converged, recalculate potential'
+         phinew(:,2)=dsqrt(dpenew/2.d0)*zexp(dcmplx(0.d0,angle(phinew(:,1:1),ntot1,1)))
+         phinew(:,1:1)=assign_phases(phinew(:,2:2),dnxnew/2.d0,T,np1,nd,ntot1,1,1.d-14)
+         phinew(:,1:1)=assign_phases(phinew(:,1:1),dnxnew/2.d0,T,np1,nd,ntot1,1,1.d-14)
+         phinew(:,2)=phinew(:,1)
+         
+         call calcvks(niter,Np1,nd,ntot1,npart,T,pinv0minresqlp1,ddnxnew,phinew,vks)
+         !recenter potential to keep energy constant
+         call recenter_potential(np1,nd,ntot1,npart,enerh,T,phinew,vks)
+         docalcvks=0
+          
+         !can try to approximate derivative of potential
+         call calcdvks(np1,nd,ntot1,npart,sw,enerh,dt,T,vin,phinew,dvksmax,vkshh,vksh,vks,dvks)
+         vks=vks-vin
+         vksconverged=1
+      end if
+      !dvks=0.d0
+
+      !calculate new approximation to orbitals
+      if (vksconverged==0) then
+         do i=1,npart
+            f=calcf1(np1,nd,ntot1,dt,T,vin,vks,dvks,phinew(:,i))
+            phinew2(:,i)=(phiplus(:,i)+f)/(1.d0+j1*dt/2.d0*vks)
+         end do
+      else
+         phinew2=phinew
+      end if
+
+      !calculate convergence error 
+      diff=0.d0
+      do i=1,npart
+         diff=diff+dble(dot_product(phinew2(:,i)-phinew(:,i),phinew2(:,i)-phinew(:,i)))
+      end do
+      !print*,abs(phinew2(:,1)-phinew(:,1))
+      write(*,'(5X,A22,1x,es17.10)')'iteration difference =',diff/dble(ntot1)
+      diff=diff/dble(ntot1) 
+      !transfer new approximation to output KS orbitals
+      phinew=phinew2
+      if (j.gt.1.and.docalcvks==0.and.diff.lt.1.d-18) then
+         if (vksconverged==0) then
+            print*,'Potential Converged'
+         end if
+         docalcvks=0 !potential converged, run extra loops to converge wavefunction
+         vksconverged=1
+      else
+         docalcvks=1 !potential not converged, recalculate potential 
+      end if
+      
+
+      
+      !check for max iterations taken
+      if (j==100) then
+         print*,'Potential did not converge, halving timestep'
+         dt=dt/2.d0
+         phinew=phi
+         vks=vksh+vin
+         dvks=dvksh
+         swh=1
+         sw=1
+         vksconverged=0
+         exit iter
+      end if
+
+      !if potential and orbitals converged exit
+       if (vksconverged==1.and.diff.lt.1.d-32) then
+          print*,'Orbitals and potential converged, Time step complete'
+          vks=vks+vin
+          if (loop.le.1) then
+             print*,'restart with dvks saved'
+             phinew=phi
+             sw=1
+             KSvals%dvks=dvks
+             KSvals%vks=vks
+             KSvals%vksh=vksh
+             vksconverged=0
+             exit iter
+          end if
+          
+         
+          
+          if (dt.lt.dth.and.swh==0) then
+             ct=ct+dt
+             dt=dt*2.d0
+             sw=1
+             swh=1
+          else
+             ct=ct+dt
+             sw=0
+          end if
+          dp=ks_density(ntot1,npart,phinew)
+          KSvals%vhar=calcvhar(ntot1,npart,ntot2,sharedvals%vinteract,dp)
+          if (sysparams%outputdata==1) then
+             call printdata(np1,nd,ntot1,npart,xlattice,ct,vks,KSvals%vhar,v1,dp,dpe,phi,sysparams%newfile)
+          end if
+
+          
+          !add back 1-body time-independant potential
+          exit iter
+       end if
+    end do iter
+    
+
+    !calculate new KS density if time step is taken
+    if (vksconverged==1) then
+       dp=ks_density(ntot1,npart,phinew)
+       density_error= dsqrt(dot_product(dp-dpenew,dp-dpenew)) 
+       write(*,'(1x,A27,1x,i0,1x,A1,1x,es16.10)')'Density error for time step',loop,'=', density_error
+    else
+       density_error= dsqrt(dot_product(dp-dpe,dp-dpe)) 
+       write(*,'(1x,A27,1x,i0,1x,A1,1x,es16.10)')'Density error for time step',loop,'=', density_error
+    end if
+
+    !Is particle number conserved?
+    print*,'Check properties of orbitals'
+    print*,'Particle number',sum(dp)
+    if (npart==2) then
+       print*,'Overlap Integral',abs(dot_product(phinew(:,1),phinew(:,2)))
+    end if
+    write(outform,'(a1,i0,a7)') '(',sysparams%npart,'es10.2)'
+    print*,'Overlap matrix'
+    do i=1,sysparams%npart
+        write(*,outform) abs(matmul(dconjg(transpose(phinew)),phinew(:,i)))
+    end do
+
+    if (vksconverged==1) then
+       !transfer output states to input for next loop
+       KSvals%phi=phinew
+       KSvals%vks=vks
+       KSvals%vksh=vksh
+       KSvals%vkshh=vkshh
+       KSvals%vhar=calcvhar(ntot1,npart,ntot2,sharedvals%vinteract,dp)
+       KSvals%dvks=dvks
+       KSvals%dvksh=dvksh
+       KSvals%dp=dp
+       info=1
+    else
+       info=0
+    end if
+    sysparams%ct=ct
+    sysparams%dt=dt
+    sysparams%dvks_sw=sw
+    sysparams%dvksh_sw=swh
+    sysparams%loop=sysparams%loop+1
+    
+
+  end subroutine advanceKSsystem_singlet
+  
 end module propagate 

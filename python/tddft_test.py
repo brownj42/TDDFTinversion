@@ -1,20 +1,22 @@
 import TDDFTinversion as td
 import numpy as np
 
-np1=81 #number of grid points for 1-dimension
+np1=145 #number of grid points for 1-dimension
 #initialize systemparameters derived type
 sysparams=td.derivedtypes.init_systemparameters(np1)
 sysparams.nd=1 #number of dimensions
 sysparams.npart=2 #number of particles
-sysparams.xmin=-13.5 #minimum grid point
-sysparams.xmax=13.5 #maximum grid point
+sysparams.xmin=-14.5 #minimum grid point
+sysparams.xmax=14.5 #maximum grid point
 sysparams.dth=0.005 #goal time step
-sysparams.dvksmax=300 #max derivative of density with respect to time
-sysparams.pinv0minresqlp1=1 #pseudoinverse set to 0, minresqlp set to 1
+sysparams.dvksmax=100000 #max derivative of density with respect to time
+sysparams.pinv0minresqlp1=0 #pseudoinverse set to 0, minresqlp set to 1
 sysparams.quantization=1 #Quantization
+sysparams.triplet=1
 sysparams.energy=-2.67 #Energy of KS system, this can if desired
 td.derivedtypes.fill_systemparameters(sysparams)
 td.keomod.buildkeo(sysparams) #build kinetic energy operator and lattice values
+sysparams.occupy_case=0
 print(sysparams)
 
 #generate derived type to store 1 and 2 body potentials
@@ -27,6 +29,9 @@ td.potential.generate_2bodypot(sysparams,sharedvals)
 fullvals=td.derivedtypes.init_fullvalues(sysparams)
 td.potential.generate_nbodypot(sysparams,sharedvals,fullvals)
 td.initial_states.initializefullsystem(sysparams,fullvals)
+eigval=np.zeros(2,dtype=np.float64)
+td.initial_states.calceigenstates(sysparams,fullvals.v,30,2,eigenvalues=eigval)
+print(eigval)
 
 #next 5 are required to develop and advance KS orbitals
 dpe=np.zeros(sysparams.ntot1,dtype=np.float64) #current density
@@ -37,7 +42,6 @@ ddnxnew=np.zeros(sysparams.ntot1,dtype=np.float64) #second derivative of density
 
 #placeholder for advancing full system
 psinew=np.zeros(sysparams.ntot,dtype=np.complex128)
-
 
 td.density.fullwf_density(sysparams,fullvals.psi,dpe)
 
@@ -67,7 +71,7 @@ for loop in range(5000):
     td.density.calcddnx(sysparams,sharedvals,sysparams.ntot1,psinew,fullvals.v,ddnxnew)
     
     #Attempt to advance KS system
-    info=td.ksadvance_mod.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
+    info=td.propagate.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
     
     if (info==1):#succesful advance of orbitals shift full wavefunction
         fullvals.psi=psinew
