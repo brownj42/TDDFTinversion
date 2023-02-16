@@ -1,7 +1,7 @@
 module KSadvance_mod
   implicit none
 contains
-  subroutine advanceKSsystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals,info)
+  subroutine advanceKSsystem_f(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals,info)
     use derivedtypes 
     use density_mod
     use hamiltonian_mod
@@ -276,6 +276,6 @@ contains
      sysparams%loop=sysparams%loop+1
      
 
-   end subroutine advanceKSsystem
+   end subroutine advanceKSsystem_f
 
  end module KSadvance_mod

@@ -4,6 +4,8 @@ module derivedtypes
      integer :: nd  !number of dimensions each particle lives in
      integer :: np1 !number of grid points in each dimension
      integer :: npart !number of particles
+     integer :: nalpha ! number of alpha electrons
+     integer :: nbeta ! number of beta electrons
      integer :: ntot1 !number of grid points for each particle
      integer :: ntot2 !number of grid points for two particles
      integer :: ntot  !number of grid points for full system
@@ -60,6 +62,8 @@ contains
        type(systemparameters), intent(out) :: sysparams
        INTEGER(4), INTENT(in) :: np1
        sysparams%np1=np1
+       sysparams%nalpha = 0
+       sysparams%nbeta = 0
        sysparams%dvksmax=1000.d0
        sysparams%ct=0.d0
        sysparams%xmin=0.d0
@@ -88,16 +92,29 @@ contains
     subroutine fill_systemparameters(sysparams)
        use nchoosekmod
        type(systemparameters), intent(inout) :: sysparams
-       integer :: jin,prev
+       integer :: jin,prev, ntota, nab, ntotb
        sysparams%ntot1=sysparams%np1**sysparams%nd
        sysparams%ntot2=sysparams%ntot1**min(sysparams%npart,2)
        if (sysparams%quantization==1) then
           sysparams%ntot=sysparams%ntot1**sysparams%npart
        else
-          jin=0
-          prev=0 
-          sysparams%ntot=0
-          call countnchoosek(sysparams%ntot1,sysparams%npart,jin,prev,sysparams%ntot)
+          if (sysparams%nalpha == 0 .and. sysparams%nbeta == 0) then
+            jin=0
+            prev=0
+            sysparams%ntot=0
+            call countnchoosek(sysparams%ntot1,sysparams%npart,jin,prev,sysparams%ntot)
+          else
+            jin = 0
+            prev = 0
+            ntota = 0
+            nab = sysparams%ntot1/2
+            call countnchoosek(nab, sysparams%nalpha, jin, prev, ntota)
+            jin = 0
+            prev = 0
+            ntotb = 0
+            call countnchoosek(nab, sysparams%nbeta, jin, prev, ntotb)
+            sysparams%ntot = ntota*ntotb
+          end if
        end if
        sysparams%energynew=sysparams%energy
        sysparams%dx=(sysparams%xmax-sysparams%xmin)/(sysparams%np1-1)

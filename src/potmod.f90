@@ -234,5 +234,6 @@ contains
           potder(l)=prefac*(xlattice(i)+xlattice(j))
        end do
     end do
-  end subroutine calculate_driving_pot 
+  end subroutine calculate_driving_pot
+
 end Module potential

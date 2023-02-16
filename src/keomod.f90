@@ -21,18 +21,25 @@ contains
        end do
     else
        sysparams%T=0.d0
+       pi=4.d0*datan(1.d0)
+       bandlimit=dble(sysparams%np1-1)*pi/(sysparams%xmax-sysparams%xmin)
        do i=1,sysparams%np1
           do j=1,sysparams%np1
-             if (i==j+1) then
-                sysparams%T(i,j)=-1.0
-             elseif (i+1==j) then
-                sysparams%T(i,j)=-1.0
+             !if (i==j+1) then
+             !   sysparams%T(i,j)=-1.0
+             !elseif (i+1==j) then
+             !   sysparams%T(i,j)=-1.0
+             !end if
+             if (i==j) then
+               sysparams%T(i,j)=bandlimit**2/6.d0
+             else
+               sysparams%T(i,j)=(bandlimit/pi)**2*(-1.d0)**(j-i)/dble(j-i)**2
              end if
           end do
-          sysparams%T(i,i)=0.d0
+          !sysparams%T(i,i)=0.d0
        end do
-       sysparams%T(1,sysparams%np1)=-0.d0
-       sysparams%T(sysparams%np1,1)=-0.d0
+       !sysparams%T(1,sysparams%np1)=-0.d0
+       !sysparams%T(sysparams%np1,1)=-0.d0
     end if
               
                 

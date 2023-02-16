@@ -30,6 +30,26 @@ contains
     end if
   end subroutine fullwf_density
   
+  subroutine fullwf_density_matrix(sysparams,yh,density)
+   use derivedtypes 
+   type(systemparameters), intent(in) :: sysparams
+   complex(8), intent(in) :: yh(:)
+   real(8), intent(out) :: density(sysparams%ntot1, sysparams%ntot1)
+   integer :: ntot1,npart
+   integer :: i,j,k
+   density =0.d0
+   ntot1=sysparams%ntot1
+   npart=sysparams%npart
+   if (npart==2) then
+       do i=1,ntot1
+          do k=1,ntot1
+             do j=1,ntot1
+                density(i,k)=density(i,k)+dble(2.d0*dconjg(yh((i-1)*ntot1+j))*yh((k-1)*ntot1+j))
+             end do
+          end do
+       end do
+    end if
+  end subroutine fullwf_density_matrix
   
   subroutine calcddnx(sysparams,sharedvals,ntot1,psi,v,ddnx) 
     use derivedtypes 
@@ -158,7 +178,5 @@ contains
     end if
     energy=zdotc(ntot,hpsi,1,psi,1)
   end subroutine calcenergy
-  
- 
    
 end module density

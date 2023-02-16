@@ -437,11 +437,11 @@ contains
     vks=vks*0.000d0+v1+10.d0
     prefac=0.05
     do i=1,20000
-       evens=.true.
+       evens=.false.
        odds=.false.
        call forcesym1(vks,ntot1)
        fas=1
-       evens=.true.
+       evens=.false.
        odds=.false.
        use2=.false.
        if (sysparams%nd>1) then
@@ -462,11 +462,11 @@ contains
           !pause 
           ys=0.d0
           do j=1,3
-             evens=.true.
+             evens=.false.
              odds=.false. 
              call forcesym1(eigenstates(:,postrac(j,1)),ntot1)
              evens=.false.
-             odds=.true. 
+             odds=.false. 
              call forcesym1(eigenstates(:,postrac(j,2)),ntot1)
              eigenstates(:,postrac(j,2))=eigenstates(:,postrac(j,2))/&
                        sqrt(dot_product(eigenstates(:,postrac(j,2)),eigenstates(:,postrac(j,2))))
@@ -488,7 +488,7 @@ contains
        end if
        fas=1
        evens=.false.
-       odds=.true.
+       odds=.false.
        use2=.false.
        if (sysparams%occupy_case==1) then
           use2=.true.
@@ -835,6 +835,7 @@ contains
           if (npc==2) then
              workd(dsp:dfp)=dble(vec)
              call forcesym(workd(dsp:dfp),Np1,Ntot)
+             workd(dsp:dfp)=workd(dsp:dfp)-100.d0*workd(ds:df)
           else
              workd(dsp:dfp)=dble(vec)
              if (npc==1) then
@@ -874,7 +875,7 @@ contains
     else
        veigs=dr
        if (present(eigenvalues)) then
-          eigenvalues=dr(1:nev)
+          eigenvalues=dr(1:nev)+100.d0
        end if
        !print*,(di(1:Neigs))!*219474.63
     end if
@@ -910,6 +911,7 @@ contains
 
   end subroutine calceigenstates
 
+  
 
   
 end Module initial_states

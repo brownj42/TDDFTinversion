@@ -1,23 +1,65 @@
 module nchoosekmod
   implicit none
 contains
-  subroutine makefocklist(M,N,plist,flist,tot)
+  subroutine makefocklist(M,N,plist,flist,tot,nalpha,nbeta)
     integer, intent(in) :: M,N
     integer, allocatable :: plist(:,:),flist(:,:)
     integer, intent(out) :: tot
+    integer, optional, INTENT(IN) :: nalpha, nbeta
+    integer, ALLOCATABLE :: the_listab(:), plista(:,:), plistb(:,:)
+    integer, allocatable :: str_buildera(:), str_builderb(:)
+    integer :: tota, totb,mh,a,b,pab
     integer:: the_list(M),str_builder(N),jin,prev,l
     do l=1,M
        the_list(l)=l
     end do
-    jin=0
-    prev=0 
-    tot=0
-    call countnchoosek(M,N,jin,prev,tot)
-    allocate(plist(N,tot))
-    jin=0
-    prev=0 
-    tot=0
-    call buildnchoosek(the_list,N,str_builder,plist,jin,prev,tot)
+   
+    if (present(nalpha)) then
+      mh = m/2
+      ALLOCATE(the_listab(mh))
+      allocate(str_buildera(nalpha), str_builderb(nbeta))
+      do l=1,Mh
+         the_listab(l)=l
+      end do
+      jin=0
+      prev=0 
+      tota=0
+      call countnchoosek(Mh, nalpha, jin, prev, tota)
+      jin=0
+      prev=0 
+      totb=0
+      call countnchoosek(Mh, nbeta, jin, prev, totb)
+      tot = tota*totb
+      allocate(plist(N, tot), plista(Nalpha, tota), plistb(Nbeta, totb))
+      jin=0
+      prev=0 
+      tota=0
+      call buildnchoosek(the_listab,nalpha,str_buildera,plista,jin,prev,tota)
+      jin=0
+      prev=0 
+      totb=0
+      call buildnchoosek(the_listab,nbeta,str_builderb,plistb,jin,prev,totb)
+      pab=0
+      do a = 1, tota
+         do b = 1, totb
+            pab = pab + 1
+            plist(1:nalpha, pab) = plista(1:nalpha, a)
+            plist(nalpha+1:N, pab) = plistb(1:nbeta, b)+Mh
+            !print*, pab, plist(1:N, pab)
+         end do
+      end do
+   else
+
+      jin=0
+      prev=0 
+      tot=0
+      call countnchoosek(M,N,jin,prev,tot)
+      allocate(plist(N,tot))
+      jin=0
+      prev=0 
+      tot=0
+      call buildnchoosek(the_list,N,str_builder,plist,jin,prev,tot)
+   end if
     allocate(flist(M,tot))
     flist=0
     do l=1,tot

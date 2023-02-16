@@ -17,7 +17,8 @@ ifeq ($(F90),gfortran)
 	FPP_F90FLAGS = -x f95-cpp-input -fPIC -fdefault-real-8 -fdefault-double-8
 	F90FLAGS = -fPIC -fopenmp -fdefault-real-8 -fdefault-double-8
     FCOMP    = gfortran
-    LIBS= -L/usr/lib64 -larpack -llapack -lopenblas_openmp -lm -lgomp
+    LIBS= -L/usr/local/opt/arpack/lib -larpack -L/usr/local/opt/lapack/lib -llapack -L/usr/local/opt/openblas/lib -lopenblas -lm -lgomp
+    #LIBS= -L/usr/local/opt/arpack/lib -larpack -framework Accelerate -lm -lgomp
 endif
 
 ifeq ($(F90),ifort)

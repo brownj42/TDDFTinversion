@@ -71,7 +71,12 @@ contains
     end if
 
     if (npc.gt.1.and.quantization==2) then
-       call makefocklist(np1,npc,posrep,pos2,ido)
+       !call makefocklist(np1,npc,posrep,pos2,ido)
+       if (sysparams%nalpha == 0 .and. sysparams%nbeta == 0) then
+         call makefocklist(np1,npc,posrep,pos2,ido)
+       else 
+         call makefocklist(np1,npc,posrep,pos2,ido, sysparams%nalpha, sysparams%nbeta)
+       end if
        if (ido.ne.ntot) then
           stop
        end if
@@ -297,6 +302,7 @@ contains
       phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
       td:do i=1,30
          if (abs(dot_product(yout-phinew,yout-phinew)).lt.1.d-32) then
+            yout=phinew
             exit td
          else
             yout=phinew
@@ -307,8 +313,98 @@ contains
    else
       yout=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
    end if
+   yout = yout/sqrt(dot_product(yout, yout))
 
   end subroutine advancewftd
+
+  subroutine advancewftd_sq(sysparams,sharedvals,niter,vin,vks,vksnew,dvks,dvksnew,yin,yout)
+   !subroutine used to advance the wavefunction yin by sysparams%dt to yout
+   !The time derivative of the potential at t and t+dt are optional, if they are present, a higher order
+   !method is used to advance the system in time.
+   use derivedtypes
+   use secondquant_mod
+   use mapmod
+   use nchoosekmod
+   type(systemparameters), intent(in) :: sysparams
+   type(sharedvalues), intent(in) :: sharedvals
+   integer, intent(in)  :: niter
+   real(8), intent(in) :: vin(:),Vks(:),vksnew(:)!,Vks(np1**npc**nd)
+   real(8), intent(in), optional :: dvks(:),dvksnew(:)
+   complex(8), intent(in) :: yin(:)
+   complex(8), intent(out) :: yout(:)
+   real(8), allocatable :: vksp(:), T(:,:), v2s(:)
+   complex(8), allocatable :: phiminus(:),phiplus(:),f(:),phinew(:)
+   complex(8), parameter :: j1=dcmplx(0.d0,1.d0)
+   integer :: i,np1,nd,ntot,npart
+   real(8) :: dt
+   integer, allocatable :: pos2(:,:),posrep(:,:)
+   integer :: ido
+   integer :: quantization,npc
+   integer :: sumn
+   integer, allocatable :: plus(:),map(:,:)
+
+   npart=sysparams%npart
+   np1=sysparams%Np1
+   ntot=sysparams%ntot
+   dt=sysparams%dt
+   nd=sysparams%nd
+   quantization = sysparams%quantization
+   npc = sysparams%npart
+   allocate(T(np1,np1))
+   T=sysparams%t
+   allocate(v2s(np1*np1))
+   v2s=sharedvals%vinteract
+
+   !call makefocklist(np1,npc,posrep,pos2,ido)
+   if (sysparams%nalpha == 0 .and. sysparams%nbeta == 0) then
+      call makefocklist(np1,npc,posrep,pos2,ido)
+    else 
+      call makefocklist(np1,npc,posrep,pos2,ido, sysparams%nalpha, sysparams%nbeta)
+    end if
+   if (ido.ne.ntot) then
+      print*, "ido does not equal ntot", ido, ntot
+      stop
+   end if
+   allocate(plus(np1))
+   call calcmap(np1,ntot,pos2,sumn,plus,map)
+
+   allocate(vksp(sysparams%ntot),phiminus(sysparams%ntot),phiplus(sysparams%ntot))
+   allocate(phinew(sysparams%ntot),f(ntot))
+   !do first part of propagation 
+   if (present(dvks)) then
+      f=calcf1_sq(npc,np1,ntot,dt,T,v2s,vks,dvks,yin,pos2,posrep,plus,sumn,map)
+   else
+      f=0.d0
+   end if
+
+   phiminus=yin-dt*j1/2.d0*vks*yin-f
+   call advancewf(sysparams,sharedvals,niter,vin,phiminus,phiplus)
+   !print*, "blahs"
+   !iterate solution
+   if (present(dvksnew)) then
+      f=calcf1_sq(npc,np1,ntot,dt,T,v2s,vks,dvks,yin,pos2,posrep,plus,sumn,map)
+      yout=yin
+      phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
+      td:do i=1,30
+         if (abs(dot_product(yout-phinew,yout-phinew)).lt.1.d-32) then
+            yout=phinew
+            exit td
+         else
+            yout=phinew
+            f=calcf1_sq(npc,np1,ntot,dt,T,v2s,vks,dvks,yout,pos2,posrep,plus,sumn,map)
+            phinew=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
+         end if
+      end do td
+   else
+      yout=(phiplus+f)/(1.d0+dt*j1/2.d0*vksnew)
+   end if
+   !print*, "blahs"
+   yout = yout/sqrt(dot_product(yout, yout))
+
+   if (npc.gt.1.and.quantization==2) then
+      deallocate(plus,map)
+   end if
+  end subroutine advancewftd_sq
 
   subroutine advancewftd_absorb(sysparams,sharedvals,niter,vin,vks,vksnew,dvks,dvksnew,yin,yout)
    !subroutine used to advance the wavefunction yin by sysparams%dt to yout
@@ -987,5 +1083,37 @@ contains
     
 
   end subroutine advanceKSsystem_singlet
-  
+    
+  subroutine calculate_vks(niter,N,nd,Nsize,npart,T,pinv0minresqlp1,ddnx,yks,vks)
+   use pot_invert_mod
+   !lattice basis size one dimension, N^3, max number of iterations for
+   !MINRES-QLP, number of particles
+   integer, intent(inout) :: N,nd,nsize,niter,npart,pinv0minresqlp1 
+   !Kinetic energy operator matrix, second derivative of density
+   real(8), intent(in) :: T(:,:),ddnx(:)
+   !current KS wavefunctions for npart particles
+   complex(8), intent(in) :: yks(:,:)
+   !Current V^KS potential
+   real(8), intent(inout) :: vks(:)
+
+   call calcvks(niter,N,nd,Nsize,npart,T,pinv0minresqlp1,ddnx,yks,vks)
+  end subroutine calculate_vks
+
+  subroutine shift_phases(N,nd,Nsize,npart,T,dnx,phis)
+   use assign_phases_mod
+   integer, intent(inout) :: N,nd,nsize,npart
+   !Kinetic energy operator matrix, second derivative of density
+   real(8), intent(in) :: T(:,:),dnx(:)
+   !current KS wavefunctions for npart particles
+   complex(8), intent(inout) :: phis(:,:)
+   complex(8), allocatable :: phihold(:,:)
+   allocate(phihold(nsize,npart))
+
+   phihold=assign_phases(phis,dnx,T,n,nd,nsize,npart,1.d-14)
+   phis = phihold
+
+   DEALLOCATE(phihold)
+
+  end subroutine shift_phases
+
 end module propagate 

@@ -24,44 +24,49 @@ contains
     end do
   end function fcheck1
 
-  real(8) function getsign(pos2p,i,k)
-    integer :: pos2p(:),i,k
+  real(8) function getsign(pos2p,i,k, length)
+    integer :: length
+    integer :: pos2p(length),i,k
     integer :: su
- 
+    integer :: vals(length)
+    vals = pos2p
     su=0
     if (k.gt.1) then
-    su=sum(pos2p(1:k-1))
+    su=sum(vals(1:k-1))
     end if
-    pos2p(k)=0
+    vals(k)=0
     if (i.gt.1) then
-    su=su+sum(pos2p(1:i-1))
+    su=su+sum(vals(1:i-1))
     end if
-    pos2p(k)=1
+    vals(k)=1
     getsign=(-1.d0)**su
   end function getsign
 
-  real(8) function getsign2(pos2p,i,j,k,l)
-    integer :: pos2p(:),i,j,k,l
+  real(8) function getsign2(pos2p,i,j,k,l,length)
+    integer :: length
+    integer :: pos2p(length),i,j,k,l
     integer :: su
+    integer :: vals(length)
+    vals = pos2p
     su=0
     if (l.gt.1) then
-    su=sum(pos2p(1:l-1))
+    su=sum(vals(1:l-1))
     end if
-    pos2p(l)=0
+    vals(l)=0
     if (k.gt.1) then
-    su=su+sum(pos2p(1:k-1))
+    su=su+sum(vals(1:k-1))
     end if
-    pos2p(k)=0
+    vals(k)=0
     if (j.gt.1) then
-    su=su+sum(pos2p(1:j-1))
+    su=su+sum(vals(1:j-1))
     end if
-    pos2p(j)=1
+    vals(j)=1
     if (i.gt.1) then
-    su=su+sum(pos2p(1:i-1))
+    su=su+sum(vals(1:i-1))
     end if
-    pos2p(k)=1
-    pos2p(l)=1
-    pos2p(j)=0
+    vals(k)=1
+    vals(l)=1
+    vals(j)=0
     getsign2=(-1.d0)**su
   end function getsign2
 
@@ -84,7 +89,7 @@ contains
              do kp=1,nab
                 k=posrep(kp,p)
                 if (fcheck1(pos2,pp,p,i,k,nbasis)==0) then
-                   si=getsign(pos2p,i,k)
+                   si=getsign(pos2p,i,k,nbasis)
                    su=su+si*H1a(i,k)*vv
                 end if
              end do
@@ -102,7 +107,7 @@ contains
                             pkl=(k-1)*nbasis+l
                             if (i==k.and.j==l) then
                                if (fcheck(pos2,pp,p,i,j,k,l,nbasis)==0) then
-                                  si=getsign2(pos2p,i,j,l,k)
+                                  si=getsign2(pos2p,i,j,l,k,nbasis)
                                   su=su+si*V2s(pij)*vv
                                end if
                             end if
@@ -113,7 +118,7 @@ contains
              end do
           end do
        end do
-       vp(pp)=su
+       vp(pp)=dble(su)
     end do
     !print*,vp
     !pause 
@@ -128,14 +133,15 @@ contains
     integer :: posrep(nab,numfci),posrepp(nab)
     integer :: plus(nbasis),sumn,map(sumn,0:numfci)
     complex(8) :: v(numfci),vp(numfci),su
-    integer :: pp,p,ip,jp,i,k,l,j,pij
+    integer :: pp,p,ip,jp,i,k,l,j,pij,ks,kf,ls,lf
     real(8) :: si
     
+
     
-             
     !$OMP parallel shared(vp,pos2,posrep) firstprivate(H1a,V2s,numfci,v,sumn,&
     !$OMP plus,map,nab,nbasis) default(private)
     !$OMP do schedule(static,4)
+    
     do pp=1,numfci
        su=dcmplx(0.d0,0.d0)
        pos2pp=pos2(:,pp)
@@ -143,12 +149,19 @@ contains
        do ip=1,nab
           i=posrepp(ip)
           pos2pp(i)=0
-          do k=1,nbasis
+          if (i.le.nbasis/2) then
+            ks = 1
+            kf = nbasis/2
+          else
+            ks = nbasis/2+1
+            kf = nbasis
+          end if
+          do k=ks,kf
           !do k=max(i-1,1),min(i+1,nbasis)
              if (pos2pp(k)==0) then
                 pos2pp(k)=1
                 p=findpos(nbasis,sumn,numfci,plus,pos2pp,map)
-                si=getsign(pos2pp,i,k)
+                si=getsign(pos2pp,i,k,nbasis)
                 su=su+si*H1a(i,k)*v(p)
                 pos2pp(k)=0
              end if
@@ -156,16 +169,74 @@ contains
           pos2pp(i)=1
        end do
        !diagonal 2-body term as is required
+       pos2pp = pos2(:, pp)
+       posrepp=posrep(:,pp)
        do ip=1,nab
           i=posrepp(ip)
           do jp=1,nab
-             if (ip.ne.jp) then
-                j=posrepp(jp)
-                pij=(i-1)*nbasis+j
-                k=i
-                l=j
-                si=getsign2(pos2pp,i,j,l,k)
-                su=su+si*V2s(pij)*v(pp)
+             j = posrepp(jp)
+             if (ip.ne.jp) then ! .and. pos2(j, pp)==1) then
+                !j=posrepp(jp)
+                !if (i .le. nbasis/2) then
+                !  ks = 1
+                !  kf = nbasis/2
+                !else
+                !  ks = nbasis/2+1
+                !  kf = nbasis
+                !end if
+                !if (j .le. nbasis/2) then
+                !  ls = 1
+                !  lf = nbasis/2
+                !else
+                !  ls = nbasis/2+1
+                !  lf = nbasis
+                !end if
+                !do k = ks,kf
+                !  do l = ls,lf
+                  !k=i
+                  !l=j
+                  !   if (k==i .and. l==j) then
+                        pij=(i-1)*nbasis+j
+                        si=getsign2(pos2pp,i,j,j,i,nbasis)
+                        su=su+si*V2s(pij)*v(pp)/2
+                  !   end if
+                !  end do
+                !end do
+                !k=i
+                !l=j
+                ! up, up
+                !if (i .le. nbasis/2 .and. j .le. nbasis/2) then
+                !  ! k = i, l = j
+                !  pij=(i-1)*nbasis+l
+                !  si=getsign2(pos2pp,i,j,l,k,nbasis)
+                !  su=su+si*V2s(pij)*v(pp)/2
+                !  ! k = j, l = i
+                !  pij=(i-1)*nbasis+k
+                !  si=getsign2(pos2pp,i,j,k,l,nbasis)
+                !  su=su+si*V2s(pij)*v(pp)/2
+                ! down, down
+                !elseif (i .gt. nbasis/2 .and. j .gt. nbasis/2) then
+                  ! k = i, l = j
+                !  pij=(i-1)*nbasis+l
+                !  si=getsign2(pos2pp,i,j,l,k,nbasis)
+                !  su=su+si*V2s(pij)*v(pp)/2
+                !  ! k = j, l = i
+                !  pij=(i-1)*nbasis+k
+                !  si=getsign2(pos2pp,i,j,k,l,nbasis)
+                !  su=su+si*V2s(pij)*v(pp)/2
+                ! up, down down up
+                !elseif (i .le. nbasis/2 .and. j .gt. nbasis/2) then
+                !  ! k = i, l = j
+                !  pij=(i-1)*nbasis+l
+                !  si=getsign2(pos2pp,i,j,l,k,nbasis)
+                !  su=su+si*V2s(pij)*v(pp)/2
+                !elseif (i .gt. nbasis/2 .and. j .le. nbasis/2) then
+                !  ! k = i, l = j
+                !  pij=(i-1)*nbasis+l
+                !  si=getsign2(pos2pp,i,j,l,k,nbasis)
+                !  su=su+si*V2s(pij)*v(pp)/2
+                !end if
+
              end if
           end do
        end do
@@ -177,5 +248,28 @@ contains
 
   end function onematvecmap
 
+  function calcf1_sq(nab,np1,ntot,dt,T,v2s,vks,dvks,phi,pos2,posrep,plus,sumn,map) result(f)
+   integer, intent(in) :: nab,np1, ntot
+   real(8) :: dt,T(np1,np1), v2s(np1*np1), vks(ntot),dvks(ntot)
+   complex(8) :: phi(ntot)
+   complex(8) :: f(ntot)
+   integer :: pos2(np1,ntot)
+   integer :: posrep(nab,ntot),posrepp(nab)
+   integer :: sumn
+   integer :: plus(np1),map(sumn,0:ntot)
+   complex(8) :: ay(ntot),nwvd(ntot,0:1),Tnwvd0(ntot)
+
+   nwvd(:,0)=vks*phi !N
+
+   Tnwvd0=onematvecmap(T,V2s,pos2,posrep,nab,np1,ntot,plus,sumn,map,nwvd(:,0))
+   ay=-dcmplx(0.d0,1.d0)*(onematvecmap(T,V2s,pos2,posrep,nab,np1,ntot,plus,sumn,map,phi)+vks*phi)
+
+   nwvd(:,1)=dvks*phi 
+   nwvd(:,1)=vks*ay+nwvd(:,1) !Nprime
+
+   f=dt**2*dcmplx(1.d0,0.d0)/12.d0*(dcmplx(-1.d0,0.d0)*&
+        (Tnwvd0)+dcmplx(0.d0,1.d0)*&
+        nwvd(:,1))
+ end function calcf1_sq
   
 end module secondquant_mod

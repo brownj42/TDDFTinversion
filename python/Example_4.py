@@ -1,15 +1,15 @@
 import TDDFTinversion as td
 import numpy as np
 
-np1=9 #number of grid points for 1-dimension
+np1=16 #number of grid points for 1-dimension
 #initialize systemparameters derived type
 sysparams=td.derivedtypes.init_systemparameters(np1)
 sysparams.nd=1 #number of dimensions
 sysparams.npart=4 #number of particles
 sysparams.xmin=0 #minimum grid point
-sysparams.xmax=8 #maximum grid point
+sysparams.xmax=15 #maximum grid point
 sysparams.ct=0. #starting time
-sysparams.dth=0.0001 #goal time step
+sysparams.dth=0.001 #goal time step
 sysparams.dvksmax=100 #max derivative of density with respect to time
 sysparams.pinv0minresqlp1=1 #pseudoinverse set to 0, minresqlp set to 1
 sysparams.quantization=2 #Quantization
@@ -38,16 +38,18 @@ ddnxnew=np.zeros(sysparams.ntot1,dtype=np.float64) #second derivative of density
 
 #placeholder for advancing full system
 psinew=np.zeros(sysparams.ntot,dtype=np.complex128)
-
+print(fullvals.psi)
+td.secondquant_wrap.calc_ground_state(sysparams, sharedvals, sysparams.np1, 40, fullvals.psi)
+print(np.linalg.norm(fullvals.psi))
 
 td.density.fullwf_density(sysparams,fullvals.psi,dpe)
 
 #initialize KS orbitals system to match dpe
 KSvals=td.initial_states.initializekssystem(sysparams,sharedvals,dpe,fullvals)
 
-    
+
 sysparams.dt=sysparams.dth/64
-for loop in range(5000):
+for loop in range(1):
     print('\n')
     print('For time '+str(sysparams.ct)+' to ',str(sysparams.ct+sysparams.dt))
     
@@ -66,6 +68,7 @@ for loop in range(5000):
     
     #Attempt to advance KS system
     info=td.propagate.advancekssystem(dpe,dpenew,dnx,ddnx,ddnxnew,sysparams,KSvals,sharedvals)
+
     
     if (info==1):#succesful advance of orbitals shift full wavefunction
         fullvals.psi=psinew

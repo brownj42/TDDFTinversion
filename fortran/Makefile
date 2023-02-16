@@ -1,12 +1,13 @@
-FFORTRAN=ifort
-LLINKER=ifort
-FFFLAGS=-O2 -xHost  -fopenmp  -I${MKLROOT}/include  
-LLFLAGS= -L. -larpack  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
+#FFORTRAN=ifort
+#LLINKER=ifort
+#FFFLAGS=-O2 -xHost  -fopenmp  -I${MKLROOT}/include  
+#LLFLAGS= -L. -larpack  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -liomp5 -lpthread -lm -ldl
 FORTRAN=gfortran
 LINKER=gfortran
-FFLAGS= -O2 -fopenmp  -fdefault-real-8 -fdefault-double-8 
-LFLAGS= -L/usr/lib64 -larpack -lopenblas_openmp -llapack -fopenmp  -lm 
-OBJECTFILES1= nchoosekmod.o mapmod.o matmul_mod.o minresqlpDataModule.o lsqrDataModule.o lsqrblasInterface.o lsqrModule.o minresqlpBlasModule.o minresqlpModule.o derivedtypes.o secondquant_mod.o secondquant_wrap.o keomod.o readin_data_mod.o potmod.o sortmod.o pot_invert_mod.o density_mod.o density_wrap.o assign_phases_mod.o hamiltonian_mod.o hamiltonian_wrap.o initial_states_mod.o outputdata_mod.o KSadvance_mod.o tddftinversion.o
+FFLAGS= -O2 -ff2c -fopenmp  -fdefault-real-8 -fdefault-double-8 
+#LFLAGS= -L/usr/local/opt/arpack/lib -larpack -L/usr/local/opt/openblas/lib -lopenblas -L/usr/local/opt/lapack/lib -llapack -fopenmp  -lm 
+LFLAGS= -L/usr/local/opt/arpack/lib -larpack -framework Accelerate  -fopenmp  -lm 
+OBJECTFILES1= outputdata_mod.o nchoosekmod.o mapmod.o matmul_mod.o minresqlpDataModule.o lsqrDataModule.o lsqrblasInterface.o lsqrModule.o minresqlpBlasModule.o minresqlpModule.o derivedtypes.o secondquant_mod.o secondquant_wrap.o keomod.o readin_data_mod.o potmod.o sortmod.o pot_invert_mod.o density_mod.o density_wrap.o assign_phases_mod.o hamiltonian_mod.o hamiltonian_wrap.o initial_states_mod.o KSadvance_mod.o tddftinversion.o
 
 
 default: tddftinversion 
