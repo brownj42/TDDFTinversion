@@ -12,6 +12,8 @@ Example_4.py 5 partiles, 1 dimension, spin system with 15 lattice points
 
 ## Potential Energy Surfaces from adiabatic density
 
+Code to generate results for [arXiv:2305:08837](https://arxiv.org/abs/2305.08837)
+
 Relevant data is in python/data folder.
 
 ### Singlet
