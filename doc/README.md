@@ -1,6 +1,6 @@
-# Tutorial
+# TDDFTinversion Tutorial
 
-This is a basic introduction to using the program.
+This is a basic introduction to using the [TDDFTinversion](https://github.com/brownj42/TDDFTinversion) program that can be found at  
 
 More information about the various modules can be found at
 
